@@ -10,10 +10,10 @@
 
     @foreach ($foods as $food)
         <div>
-            <img src="{{ asset($food['image']) }}" alt="{{ $food['name] }}" width="200">
+            <img src="{{ asset($food['image']) }}" alt="{{ $food['name'] }}" width="200">
             <h2>{{ $food['name'] }}</h2>
-            <p><strong>Asal Daerah :</strong> {{ $food['region'] }}</p>
-            <p>{{ $food{'description'} }}</p>
+            <p><strong>Asal Daerah:</strong> {{ $food['region'] }}</p>
+            <p>{{ $food['description'] }}</p>
             <a href="{{ url('/food-detail/' . $food['slug']) }}">Lihat Detail</a>
         </div>
     @endforeach
