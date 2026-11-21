@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Recipe extends Model
 {
@@ -55,4 +58,11 @@ class Recipe extends Model
     {
         return $query->where('approval_status', 'pending');
     }
+
+    public function ingredients(): BelongsToMany
+{
+    return $this->belongsToMany(Ingredient::class, 'recipe_ingredients')
+        ->withPivot(['amount', 'unit', 'notes'])
+        ->withTimestamps();
+}
 }
