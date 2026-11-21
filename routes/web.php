@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PageController;
-use App\Http\Controller\RecipeController;
+use App\Http\Controllers\RecipeController;
 
 Route::get('/', [PageController::class, 'home'])->name('home');
 Route::get('/explore', [PageController::class, 'explore'])->name('explore');
