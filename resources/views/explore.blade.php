@@ -120,7 +120,7 @@
                                 @if (file_exists(public_path($popular['image'])))
                                     <img src="{{ asset($popular['image']) }}" alt="{{ $popular['name'] }}">
                                 @else
-                                    <span>{{ \Illuminate\Support\Str::limit($popular['name'], 12, '') }}</span>
+                                    <span>{{ substr($popular['name'], 0, 12) }}</span>
                                 @endif
                             </div>
                             <div class="popular-side-info">

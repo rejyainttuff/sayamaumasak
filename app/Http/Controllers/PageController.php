@@ -31,13 +31,11 @@ class PageController extends Controller
 
         $filtered = $allFoods
             ->when($search !== '', function ($collection) use ($search) {
-                $needle = mb_strtolower($search);
-
-                return $collection->filter(function (array $food) use ($needle): bool {
-                    return str_contains(mb_strtolower($food['name']), $needle)
-                        || str_contains(mb_strtolower($food['description']), $needle)
-                        || str_contains(mb_strtolower($food['region']), $needle)
-                        || str_contains(mb_strtolower($food['category']), $needle);
+                return $collection->filter(function (array $food) use ($search): bool {
+                    return stripos($food['name'], $search) !== false
+                        || stripos($food['description'], $search) !== false
+                        || stripos($food['region'], $search) !== false
+                        || stripos($food['category'], $search) !== false;
                 });
             })
             ->when($selectedCategory !== '', fn ($collection) => $collection->where('category', $selectedCategory))
@@ -137,7 +135,8 @@ class PageController extends Controller
             fn (string $line): bool => $line !== ''
         ));
 
-        $slug = Str::slug($validated['name']).'-'.Str::lower(Str::random(4));
+        $baseSlug = strtolower(trim((string) preg_replace('/[^a-zA-Z0-9]+/', '-', $validated['name']), '-'));
+        $slug = ($baseSlug !== '' ? $baseSlug : 'resep').'-'.strtolower(Str::random(4));
 
         $newRecipe = [
             'id' => time(),
