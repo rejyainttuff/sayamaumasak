@@ -48,6 +48,26 @@
                     </svg>
                     <span class="recipe-fav-count" id="nav-fav-count">0</span>
                 </a>
+
+                @auth
+                    @if (in_array(auth()->user()->role, ['admin', 'helper'], true))
+                        <a href="{{ route('recipes.index') }}">Kelola Resep</a>
+                    @endif
+
+                    @if (auth()->user()->role === 'admin')
+                        <a href="{{ route('foods.index') }}">Kelola Makanan</a>
+                    @endif
+
+                    <span>{{ auth()->user()->name }} ({{ auth()->user()->role }})</span>
+
+                    <form action="{{ route('logout') }}" method="POST" style="display: inline;">
+                        @csrf
+                        <button type="submit">Keluar</button>
+                    </form>
+                @else
+                    <a href="{{ route('login') }}">Masuk</a>
+                @endauth
+
             </div>
         </div>
     </nav>
