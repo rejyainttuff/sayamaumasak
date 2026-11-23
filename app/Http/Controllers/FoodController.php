@@ -12,11 +12,37 @@ use Illuminate\View\View;
 
 class FoodController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $foods = Food::with('category')->latest()->paginate(10);
+        $search = trim((string) $request->query('search', ''));
+        $categoryFilter = trim((string) $request->query('category', ''));
 
-        return view('foods.index', compact('foods'));
+        $escapedSearch = addcslashes($search, '%_\\');
+
+        $foods = Food::with('category')
+            ->when($search !== '', function ($query) use ($escapedSearch) {
+                $query->where(function ($subQuery) use ($escapedSearch) {
+                    $subQuery->where('name', 'like', "%{$escapedSearch}%")
+                        ->orWhere('origin_area', 'like', "%{$escapedSearch}%")
+                        ->orWhere('short_description', 'like', "%{$escapedSearch}%");
+                });
+            })
+            ->when($categoryFilter !== '', function ($query) use ($categoryFilter) {
+                if (ctype_digit($categoryFilter)) {
+                    $query->where('category_id', (int) $categoryFilter);
+                } else {
+                    $query->whereHas('category', function ($categoryQuery) use ($categoryFilter) {
+                        $categoryQuery->where('slug', $categoryFilter);
+                    });
+                }
+            })
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
+
+        $categories = Category::orderBy('name')->get();
+
+        return view('foods.index', compact('foods', 'categories', 'search', 'categoryFilter'));
     }
 
     public function create(): View
