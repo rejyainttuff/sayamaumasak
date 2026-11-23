@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\FoodController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\RecipeController;
 use Illuminate\Support\Facades\Route;
@@ -26,4 +27,11 @@ Route::middleware(['auth', 'role:admin,helper'])->group(function () {
 Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::patch('/recipes/{recipe}/approve', [RecipeController::class, 'approve'])->name('recipes.approve');
     Route::patch('/recipes/{recipe}/reject', [RecipeController::class, 'reject'])->name('recipes.reject');
+
+    Route::get('/foods', [FoodController::class, 'index'])->name('foods.index');
+    Route::get('/foods/create', [FoodController::class, 'create'])->name('foods.create');
+    Route::post('/foods', [FoodController::class, 'store'])->name('foods.store');
+    Route::get('/foods/{food}/edit', [FoodController::class, 'edit'])->name('foods.edit');
+    Route::put('/foods/{food}', [FoodController::class, 'update'])->name('foods.update');
+    Route::delete('/foods/{food}', [FoodController::class, 'destroy'])->name('foods.destroy');
 });
