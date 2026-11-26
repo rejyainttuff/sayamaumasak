@@ -283,7 +283,7 @@ class PageController extends Controller
             'storySubmissions'
         ));
     }
-}
+
     public function stories(): View
     {
         $stories = [];
