@@ -139,6 +139,65 @@
 
         <img src="{{ asset('Assets/images/decor-hibiscus.png') }}" alt="" class="corner-hibiscus bottom-right" aria-hidden="true">
     </section>
+    <section class="recipe-container" style="padding-bottom: 48px;">
+        <div class="detail-panel">
+            <h2 style="margin-bottom: 14px;">Ulasan ({{ $reviewsCount }}) &mdash; &#9733; {{ number_format((float) $averageRating, 1) }} / 5</h2>
+
+            @if ($errors->any())
+                <div class="alert-banner error">
+                    <ul style="margin: 0; padding-left: 18px;">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            @auth
+                <form action="{{ route('reviews.store', $food['slug']) }}" method="POST" style="margin-bottom: 20px;">
+                    @csrf
+                    <div class="form-grid-2" style="margin-bottom: 12px;">
+                        <div class="form-group">
+                            <label for="rating">Rating (1 - 5)</label>
+                            <select name="rating" id="rating" class="form-control" required>
+                                <option value="">Pilih rating</option>
+                                @for ($i = 5; $i >= 1; $i--)
+                                    <option value="{{ $i }}" @selected((string) old('rating') === (string) $i)>
+                                        {{ $i }} Bintang
+                                    </option>
+                                @endfor
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="comment">Komentar (opsional)</label>
+                            <textarea name="comment" id="comment" rows="2" class="form-control" style="min-height: 44px;" placeholder="Tulis pengalamanmu mencoba resep ini...">{{ old('comment') }}</textarea>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-terracotta rect">Kirim Ulasan</button>
+                </form>
+            @else
+                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px;">
+                    <a href="{{ route('login') }}" style="color: var(--terracotta); font-weight: 600;">Masuk</a> terlebih dahulu untuk menulis ulasan.
+                </p>
+            @endauth
+
+            @forelse ($reviews as $review)
+                <div class="ulasan-feed-item" style="padding: 12px 0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <strong>{{ $review->user->name ?? 'Pengguna' }}</strong>
+                        <span style="font-size: 11.5px; color: var(--muted);">{{ $review->created_at?->format('d/m/Y') }}</span>
+                    </div>
+                    <div style="color: var(--star); font-size: 12.5px;">&#9733; {{ $review->rating }}/5</div>
+                    @if ($review->comment)
+                        <p>{{ $review->comment }}</p>
+                    @endif
+                </div>
+            @empty
+                <p style="font-size: 13px; color: var(--muted); margin: 0;">Belum ada ulasan tersimpan untuk makanan ini.</p>
+            @endforelse
+        </div>
+    </section>
 @endsection
 
 @push('scripts')

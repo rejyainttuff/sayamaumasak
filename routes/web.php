@@ -61,4 +61,6 @@ Route::post('/logout', [AuthController::class, 'logout'])
 Route::middleware('auth')->group(function () {
     Route::post('/favorites/toggle/{slug}', [PageController::class, 'toggleFavorite'])
         ->name('favorites.toggle');
+    Route::post('/foods/{slug}/reviews', [PageController::class, 'storeReview'])
+        ->name('reviews.store');
 });
