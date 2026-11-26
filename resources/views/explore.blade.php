@@ -40,15 +40,15 @@
                 </div>
 
                 <div class="toolbar-filter">
-                    <label for="filter-region">Asal Daerah</label>
-                    <select id="filter-region" name="region" onchange="this.form.submit()">
-                        <option value="">Semua</option>
-                        @foreach ($regions as $region)
-                            <option value="{{ $region }}" @selected($selectedRegion === $region)>{{ $region }}</option>
-                        @endforeach
+                    <label for="filter-sort">Urutkan</label>
+                    <select id="filter-sort" name="sort" onchange="this.form.submit()">
+                        <option value="default" @selected(($sort ?? 'default') === 'default')>Default</option>
+                        <option value="name_asc" @selected(($sort ?? '') === 'name_asc')>Nama (A - Z)</option>
+                        <option value="name_desc" @selected(($sort ?? '') === 'name_desc')>Nama (Z - A)</option>
+                        <option value="region_asc" @selected(($sort ?? '') === 'region_asc')>Daerah (A - Z)</option>
+                        <option value="popular" @selected(($sort ?? '') === 'popular')>Terpopuler</option>
                     </select>
                 </div>
-
                 <div class="toolbar-filter">
                     <label for="filter-difficulty">Tingkat Kesulitan</label>
                     <select id="filter-difficulty" name="difficulty" onchange="this.form.submit()">
@@ -61,7 +61,7 @@
 
                 <a href="{{ route('recipe.create') }}" class="btn-terracotta rect" style="height: 40px;">+ Tambah Resep</a>
 
-                @if ($search !== '' || $selectedCategory !== '' || $selectedRegion !== '' || $selectedDifficulty !== '')
+                @if ($search !== '' || $selectedCategory !== '' || $selectedRegion !== '' || $selectedDifficulty !== '' || ($sort ?? 'default') !== 'default')
                     <a href="{{ route('explore') }}" class="btn-white" style="height: 40px;">Reset</a>
                 @endif
             </form>

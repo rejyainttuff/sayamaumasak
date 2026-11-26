@@ -34,6 +34,7 @@ class PageController extends Controller
         $selectedCategory = trim((string) $request->query('category', ''));
         $selectedRegion = trim((string) $request->query('region', ''));
         $selectedDifficulty = trim((string) $request->query('difficulty', ''));
+        $sort = trim((string) $request->query('sort', 'default'));
 
         $categories = $this->getCategoriesList();
         $regions = $allFoods->pluck('region')->filter()->unique()->sort()->values()->all();
@@ -50,8 +51,17 @@ class PageController extends Controller
             })
             ->when($selectedCategory !== '', fn ($collection) => $collection->where('category', $selectedCategory))
             ->when($selectedRegion !== '', fn ($collection) => $collection->where('region', $selectedRegion))
-            ->when($selectedDifficulty !== '', fn ($collection) => $collection->where('difficulty', $selectedDifficulty))
-            ->values();
+            ->when($selectedDifficulty !== '', fn ($collection) => $collection->where('difficulty', $selectedDifficulty));
+
+        $filtered = match ($sort) {
+            'name_asc'   => $filtered->sortBy(fn (array $food) => mb_strtolower($food['name'])),
+            'name_desc'  => $filtered->sortByDesc(fn (array $food) => mb_strtolower($food['name'])),
+            'region_asc' => $filtered->sortBy(fn (array $food) => mb_strtolower($food['region'] ?? '')),
+            'popular'    => $filtered->sortByDesc(fn (array $food) => !empty($food['is_popular']) ? 1 : 0),
+            default      => $filtered,
+        };
+
+        $filtered = $filtered->values();
 
         $perPage = 8;
         $totalPages = max(1, (int) ceil($filtered->count() / $perPage));
@@ -70,6 +80,7 @@ class PageController extends Controller
             'selectedCategory',
             'selectedRegion',
             'selectedDifficulty',
+            'sort',
             'currentPage',
             'totalPages'
         ));
