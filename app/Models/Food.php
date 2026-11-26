@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Food extends Model
@@ -31,5 +32,10 @@ class Food extends Model
     public function culinaryStories(): HasMany
     {
         return $this->hasMany(CulinaryStory::class);
+    }
+
+    public function favoritedBy(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'food_user')->withTimestamps();
     }
 }

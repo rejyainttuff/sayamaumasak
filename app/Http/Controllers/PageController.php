@@ -10,6 +10,8 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Auth;
+
 
 class PageController extends Controller
 {
@@ -85,7 +87,15 @@ class PageController extends Controller
                 ->all()
             : [];
 
-        return view('food-detail', compact('food', 'foods', 'relatedFoods'));
+        $isFavorited = false;
+        if (Auth::check() && $food) {
+            $foodModel = Food::where('slug', $food['slug'])->first();
+            if ($foodModel) {
+                $isFavorited = Auth::user()->favoriteFoods()->where('foods.id', $foodModel->id)->exists();
+            }
+        }
+
+        return view('food-detail', compact('food', 'foods', 'relatedFoods', 'isFavorited'));
     }
 
     public function recipe(Request $request): View
@@ -181,13 +191,6 @@ class PageController extends Controller
         return redirect()
             ->route('food.detail', $slug)
             ->with('success', 'Resep "'.$validated['name'].'" berhasil dibagikan!');
-    }
-
-    public function favorites(): View
-    {
-        $foods = $this->getAllCulinaryData();
-
-        return view('favorites', compact('foods'));
     }
 
     public function stories(): View
@@ -312,5 +315,43 @@ class PageController extends Controller
                 'image' => $image,
             ];
         })->all();
+    }
+
+    public function toggleFavorite(Request $request, string $slug): RedirectResponse
+    {
+        $user = Auth::user();
+        $food = Food::where('slug', $slug)->first();
+
+        if (! $food) {
+            return back()->with('error', 'Data makanan tidak ditemukan di database.');
+        }
+
+        $exists = $user->favoriteFoods()->where('foods.id', $food->id)->exists();
+
+        if ($exists) {
+            $user->favoriteFoods()->detach($food->id);
+            $message = 'Makanan dihapus dari daftar favorit.';
+        } else {
+            $user->favoriteFoods()->attach($food->id);
+            $message = 'Makanan berhasil disimpan ke favorit!';
+        }
+
+        return back()->with('success', $message);
+    }
+
+    public function favorites(): View
+    {
+        $favoriteSlugs = Auth::check()
+            ? Auth::user()->favoriteFoods()->pluck('slug')->all()
+            : [];
+
+        $allFoods = $this->getAllCulinaryData();
+
+        $foods = array_values(array_filter(
+            $allFoods,
+            fn (array $food): bool => in_array($food['slug'], $favoriteSlugs, true)
+        ));
+
+        return view('favorites', compact('foods'));
     }
 }

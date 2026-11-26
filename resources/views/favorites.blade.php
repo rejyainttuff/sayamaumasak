@@ -15,6 +15,12 @@
 
     <section class="section-block">
         <div class="recipe-container">
+            @if (session('success'))
+                <div class="alert-banner success" style="margin-bottom: 20px;">
+                    {{ session('success') }}
+                </div>
+            @endif
+
             <div class="section-header">
                 <div class="section-title-group">
                     <span class="starburst-badge" aria-hidden="true">&#9829;</span>
@@ -23,56 +29,19 @@
                 <a href="{{ route('explore') }}" class="btn-terracotta">Jelajahi Resep Lain &rarr;</a>
             </div>
 
-            <div class="recipe-grid cols-3" id="favorites-grid">
-                @foreach ($foods as $food)
-                    @include('partials.recipe-card', ['food' => $food])
-                @endforeach
-            </div>
-
-            <div class="recipe-empty" id="favorites-empty" style="display: none;">
-                <h3>Belum ada resep favorit</h3>
-                <p>Klik ikon hati pada kartu resep atau tombol "Simpan Resep" di halaman detail untuk menyimpannya di sini.</p>
-                <a href="{{ route('explore') }}" class="btn-terracotta">Mulai Jelajahi Resep</a>
-            </div>
+            @if (count($foods) > 0)
+                <div class="recipe-grid cols-3" id="favorites-grid">
+                    @foreach ($foods as $food)
+                        @include('partials.recipe-card', ['food' => $food])
+                    @endforeach
+                </div>
+            @else
+                <div class="recipe-empty" id="favorites-empty">
+                    <h3>Belum ada resep favorit</h3>
+                    <p>Klik tombol "Simpan Resep" di halaman detail kuliner untuk menyimpannya ke sini.</p>
+                    <a href="{{ route('explore') }}" class="btn-terracotta">Mulai Jelajahi Resep</a>
+                </div>
+            @endif
         </div>
     </section>
 @endsection
-
-@push('scripts')
-    <script>
-        (function () {
-            function filterFavorites(favs) {
-                const grid = document.getElementById('favorites-grid');
-                const empty = document.getElementById('favorites-empty');
-                if (!grid || !empty) {
-                    return;
-                }
-
-                let visibleCount = 0;
-                grid.querySelectorAll('[data-food-slug]').forEach(function (card) {
-                    const slug = card.getAttribute('data-food-slug');
-                    const show = favs.includes(slug);
-                    card.style.display = show ? '' : 'none';
-                    if (show) {
-                        visibleCount++;
-                    }
-                });
-
-                grid.style.display = visibleCount > 0 ? '' : 'none';
-                empty.style.display = visibleCount > 0 ? 'none' : '';
-            }
-
-            window.addEventListener('favorites:updated', function (e) {
-                filterFavorites(e.detail.favs || []);
-            });
-
-            try {
-                const raw = localStorage.getItem('sayamaumasak_favorites');
-                const parsed = raw ? JSON.parse(raw) : [];
-                filterFavorites(Array.isArray(parsed) ? parsed : []);
-            } catch (e) {
-                filterFavorites([]);
-            }
-        })();
-    </script>
-@endpush

@@ -48,3 +48,8 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [AuthController::class, 'logout'])
     ->name('logout')
     ->middleware('auth');
+
+Route::middleware('auth')->group(function () {
+    Route::post('/favorites/toggle/{slug}', [PageController::class, 'toggleFavorite'])
+        ->name('favorites.toggle');
+});

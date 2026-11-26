@@ -32,14 +32,20 @@
                 </div>
 
                 <div class="recipe-hero-actions">
-                    <button
-                        type="button"
-                        class="btn-terracotta rect js-favorite-toggle"
-                        data-slug="{{ $food['slug'] }}"
-                    >
-                        <span>&#9829;</span>
-                        <span class="js-fav-label">Simpan Resep</span>
-                    </button>
+                    @auth
+                        <form action="{{ route('favorites.toggle', $food['slug']) }}" method="POST" style="display: inline;">
+                            @csrf
+                            <button type="submit" class="btn-terracotta rect">
+                                <span>&#9829;</span>
+                                <span>{{ !empty($isFavorited) ? 'Hapus dari Favorit' : 'Simpan Resep' }}</span>
+                            </button>
+                        </form>
+                    @else
+                        <a href="{{ route('login') }}" class="btn-terracotta rect" style="text-decoration: none;">
+                            <span>&#9829;</span>
+                            <span>Masuk untuk Menyimpan</span>
+                        </a>
+                    @endauth
                 </div>
             </div>
         </div>
