@@ -72,6 +72,7 @@ class RecipeController extends Controller
 
         DB::transaction(function () use ($request, $validated, $approvalStatus) {
             $recipe = Recipe::create([
+                'user_id' => $request->user()?->id,
                 'food_id' => $validated['food_id'],
                 'title' => $validated['title'],
                 'prep_time_minutes' => $validated['prep_time_minutes'],

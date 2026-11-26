@@ -11,12 +11,14 @@ class Food extends Model
 {   
     protected $table = 'foods';
     protected $fillable = [
+        'user_id',
         'category_id',
         'name',
         'slug',
         'origin_area',
         'short_description',
         'thumbnail',
+        'approval_status',
     ];
 
     public function category(): BelongsTo
@@ -42,5 +44,10 @@ class Food extends Model
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

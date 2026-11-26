@@ -69,11 +69,18 @@ class FoodController extends Controller
             $validated['thumbnail'] = '/storage/' . $path;
         }
 
+        $validated['user_id'] = $request->user()?->id;
+        $validated['approval_status'] = $request->user()?->isAdmin() ? 'approved' : 'pending';
+
         Food::create($validated);
+
+        $message = $validated['approval_status'] === 'approved'
+            ? 'Data makanan berhasil ditambahkan dan disetujui.'
+            : 'Data makanan berhasil dikirim dan menunggu persetujuan admin.';
 
         return redirect()
             ->route('foods.index')
-            ->with('success', 'Data makanan berhasil ditambahkan.');
+            ->with('success', $message);
     }
 
     public function edit(Food $food): View

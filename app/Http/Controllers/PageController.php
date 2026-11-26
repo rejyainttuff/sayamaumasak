@@ -399,4 +399,30 @@ class PageController extends Controller
 
         return back()->with('success', 'Ulasan berhasil disimpan!');
     }
+
+    public function mySubmissions(Request $request): View
+    {
+        $userId = $request->user()->id;
+
+        $foodSubmissions = Food::with('category')
+            ->where('user_id', $userId)
+            ->latest()
+            ->get();
+
+        $recipeSubmissions = Recipe::with('food')
+            ->where('user_id', $userId)
+            ->latest()
+            ->get();
+
+        $storySubmissions = CulinaryStory::with('food')
+            ->where('user_id', $userId)
+            ->latest()
+            ->get();
+
+        return view('submissions', compact(
+            'foodSubmissions',
+            'recipeSubmissions',
+            'storySubmissions'
+        ));
+    }
 }

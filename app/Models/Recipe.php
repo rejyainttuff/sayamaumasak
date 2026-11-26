@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Recipe extends Model
 {
     protected $fillable = [
+        'user_id',
         'food_id',
         'title',
         'prep_time_minutes',
@@ -60,9 +61,14 @@ class Recipe extends Model
     }
 
     public function ingredients(): BelongsToMany
-{
-    return $this->belongsToMany(Ingredient::class, 'recipe_ingredients')
-        ->withPivot(['amount', 'unit', 'notes'])
-        ->withTimestamps();
-}
+    {
+        return $this->belongsToMany(Ingredient::class, 'recipe_ingredients')
+            ->withPivot(['amount', 'unit', 'notes'])
+            ->withTimestamps();
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 }

@@ -5,6 +5,7 @@ use App\Http\Controllers\PageController;
 use App\Http\Controllers\RecipeController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CulinaryStoryController;
 
 Route::get('/', [PageController::class, 'home'])->name('home');
 Route::get('/explore', [PageController::class, 'explore'])->name('explore');
@@ -30,8 +31,6 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::patch('/recipes/{recipe}/reject', [RecipeController::class, 'reject'])->name('recipes.reject');
 
     Route::get('/foods', [FoodController::class, 'index'])->name('foods.index');
-    Route::get('/foods/create', [FoodController::class, 'create'])->name('foods.create');
-    Route::post('/foods', [FoodController::class, 'store'])->name('foods.store');
     Route::get('/foods/{food}/edit', [FoodController::class, 'edit'])->name('foods.edit');
     Route::put('/foods/{food}', [FoodController::class, 'update'])->name('foods.update');
     Route::delete('/foods/{food}', [FoodController::class, 'destroy'])->name('foods.destroy');
@@ -54,4 +53,12 @@ Route::middleware('auth')->group(function () {
         ->name('favorites.toggle');
     Route::post('/foods/{slug}/reviews', [PageController::class, 'storeReview'])
         ->name('reviews.store');
+
+    Route::get('/foods/create', [FoodController::class, 'create'])->name('foods.create');
+    Route::post('/foods', [FoodController::class, 'store'])->name('foods.store');
+
+    Route::get('/stories/create', [CulinaryStoryController::class, 'create'])->name('stories.create');
+    Route::post('/stories', [CulinaryStoryController::class, 'store'])->name('stories.store');
+
+    Route::get('/my-submissions', [PageController::class, 'mySubmissions'])->name('submissions.index');
 });
