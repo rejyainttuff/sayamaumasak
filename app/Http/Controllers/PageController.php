@@ -290,7 +290,16 @@ class PageController extends Controller
 
         if ($this->hasDatabaseTable('culinary_stories')) {
             try {
-                $dbStories = CulinaryStory::with('food')->latest()->get();
+                $storyQuery = CulinaryStory::with('food')->latest();
+
+                if (Schema::hasColumn('culinary_stories', 'approval_status')) {
+                    $storyQuery->where('approval_status', 'approved');
+                } elseif (Schema::hasColumn('culinary_stories', 'status')) {
+                    $storyQuery->where('status', 'approved');
+                }
+
+                $dbStories = $storyQuery->get();
+
                 foreach ($dbStories as $item) {
                     $plain = trim(strip_tags((string) $item->content));
                     $stories[] = [
@@ -412,61 +421,90 @@ class PageController extends Controller
     public function adminDashboard(Request $request): View
     {
         $foods = $this->getAllCulinaryData();
-        $statusOverrides = $request->session()->get('admin_recipe_statuses', []);
 
-        $recentMenu = [
-            [
-                'slug' => 'lawar-bali',
-                'name' => 'Lawar Bali',
-                'author' => 'oleh Made Surya',
-                'status' => $statusOverrides['lawar-bali'] ?? 'pending',
-                'time' => '10 menit lalu',
-            ],
-            [
-                'slug' => 'ayam-betutu-gilimanuk',
-                'name' => 'Ayam Betutu',
-                'author' => 'oleh Ni Luh Putu',
-                'status' => $statusOverrides['ayam-betutu-gilimanuk'] ?? 'approved',
-                'time' => '1 jam lalu',
-            ],
-            [
-                'slug' => 'sate-lilit-ikan',
-                'name' => 'Sate Lilit',
-                'author' => 'oleh Komang Adi',
-                'status' => $statusOverrides['sate-lilit-ikan'] ?? 'rejected',
-                'time' => '3 jam lalu',
-            ],
-        ];
+        $pendingRecipes = Recipe::with(['user', 'food'])
+            ->where('approval_status', 'pending')
+            ->latest()
+            ->get();
 
-        $pendingSubmissions = [
-            [
-                'slug' => 'lawar-bali',
-                'name' => 'Lawar Bali Kuwir',
-                'author' => 'Diajukan oleh Made Surya · Badung',
-                'status' => $statusOverrides['lawar-bali'] ?? 'pending',
-            ],
-            [
-                'slug' => 'tipat-cantok',
-                'name' => 'Tipat Cantok Denpasar',
-                'author' => 'Diajukan oleh Putu Ayu · Denpasar',
-                'status' => $statusOverrides['tipat-cantok'] ?? 'pending',
-            ],
-        ];
+        $pendingFoods = collect();
+        if (Schema::hasTable('foods')) {
+            $foodQuery = Food::with('category')->whereNotNull('user_id')->latest();
+            if (Schema::hasColumn('foods', 'approval_status')) {
+                $foodQuery->where('approval_status', 'pending');
+            }
+            $pendingFoods = $foodQuery->get();
+        }
 
-        foreach ($request->session()->get('custom_recipes', []) as $custom) {
-            array_unshift($pendingSubmissions, [
-                'slug' => $custom['slug'],
-                'name' => $custom['name'],
-                'author' => 'Diajukan oleh '.($custom['author'] ?? 'Pengguna').' · '.$custom['region'],
-                'status' => $statusOverrides[$custom['slug']] ?? ($custom['status'] ?? 'pending'),
+        $pendingStories = collect();
+        if (Schema::hasTable('culinary_stories')) {
+            $storyQuery = CulinaryStory::with(['user', 'food'])->latest();
+            if (Schema::hasColumn('culinary_stories', 'approval_status')) {
+                $storyQuery->where('approval_status', 'pending');
+            }
+            $pendingStories = $storyQuery->get();
+        }
+
+        $pendingSubmissions = collect();
+
+        foreach ($pendingRecipes as $recipe) {
+            $pendingSubmissions->push([
+                'id'     => $recipe->id,
+                'type'   => 'recipe',
+                'label'  => 'Resep',
+                'slug'   => $recipe->slug ?? $recipe->food?->slug ?? '',
+                'name'   => $recipe->title ?? $recipe->name ?? 'Resep Tanpa Judul',
+                'author' => 'Diajukan oleh ' . ($recipe->user?->name ?? 'Contributor'),
+                'status' => $recipe->approval_status ?? 'pending',
+                'model'  => $recipe,
             ]);
         }
 
+        foreach ($pendingFoods as $food) {
+            $pendingSubmissions->push([
+                'id'     => $food->id,
+                'type'   => 'food',
+                'label'  => 'Makanan',
+                'slug'   => $food->slug ?? '',
+                'name'   => $food->name ?? 'Kuliner Tanpa Nama',
+                'author' => 'Diajukan oleh ' . ($food->user?->name ?? 'Contributor'),
+                'status' => $food->approval_status ?? 'pending',
+                'model'  => $food,
+            ]);
+        }
+
+        foreach ($pendingStories as $story) {
+            $pendingSubmissions->push([
+                'id'     => $story->id,
+                'type'   => 'story',
+                'label'  => 'Cerita Kuliner',
+                'slug'   => $story->food?->slug ?? '',
+                'name'   => $story->title ?? ($story->food?->name ?? 'Cerita Kuliner'),
+                'author' => 'Diajukan oleh ' . ($story->user?->name ?? 'Contributor'),
+                'status' => $story->approval_status ?? 'pending',
+                'model'  => $story,
+            ]);
+        }
+
+        $recentMenu = Recipe::with('user')
+            ->latest()
+            ->take(5)
+            ->get()
+            ->map(function ($recipe) {
+                return [
+                    'slug'   => $recipe->slug ?? '',
+                    'name'   => $recipe->title ?? $recipe->name ?? 'Resep',
+                    'author' => 'oleh ' . ($recipe->user?->name ?? 'Contributor'),
+                    'status' => $recipe->approval_status ?? 'pending',
+                    'time'   => $recipe->created_at ? $recipe->created_at->diffForHumans() : '-',
+                ];
+            });
+
         $stats = [
-            'foods' => 123,
-            'recipes' => 234 + count($request->session()->get('custom_recipes', [])),
-            'pending' => 67,
-            'reviews' => '1.2K',
+            'foods'    => Schema::hasTable('foods') ? Food::count() : count($foods),
+            'recipes'  => Schema::hasTable('recipes') ? Recipe::count() : 0,
+            'pending'  => $pendingSubmissions->count(),
+            'reviews'  => Schema::hasTable('reviews') ? Review::count() : 0,
         ];
 
         return view('admin.dashboard', compact('stats', 'recentMenu', 'pendingSubmissions', 'foods'));
@@ -476,15 +514,26 @@ class PageController extends Controller
     {
         $validated = $request->validate([
             'status' => ['required', 'in:approved,rejected,pending'],
+            'type'   => ['nullable', 'in:recipe,food,story'],
+            'id'     => ['nullable'],
         ]);
 
-        $overrides = $request->session()->get('admin_recipe_statuses', []);
-        $overrides[$slug] = $validated['status'];
-        $request->session()->put('admin_recipe_statuses', $overrides);
+        $type = $validated['type'] ?? null;
+        $id = $validated['id'] ?? null;
 
-        $label = $validated['status'] === 'approved' ? 'disetujui' : 'ditolak';
+        if ($type === 'food' && $id && Schema::hasTable('foods') && Schema::hasColumn('foods', 'approval_status')) {
+            Food::whereKey($id)->update(['approval_status' => $validated['status']]);
+        } elseif ($type === 'story' && $id && Schema::hasTable('culinary_stories') && Schema::hasColumn('culinary_stories', 'approval_status')) {
+            CulinaryStory::whereKey($id)->update(['approval_status' => $validated['status']]);
+        } else {
+            $overrides = $request->session()->get('admin_recipe_statuses', []);
+            $overrides[$slug] = $validated['status'];
+            $request->session()->put('admin_recipe_statuses', $overrides);
+        }
 
-        return back()->with('success', 'Status resep berhasil diperbarui menjadi '.$label.'.');
+        $label = $validated['status'] === 'approved' ? 'disetujui' : ($validated['status'] === 'rejected' ? 'ditolak' : 'pending');
+
+        return back()->with('success', 'Status kiriman berhasil diperbarui menjadi ' . $label . '.');
     }
 
     /**

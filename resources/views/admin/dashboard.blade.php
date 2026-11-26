@@ -177,30 +177,56 @@
                         <a href="{{ route('recipes.index') }}">Lihat Semua &rarr;</a>
                     </div>
 
-                    @foreach ($pendingSubmissions as $sub)
+                    @forelse ($pendingSubmissions as $sub)
                         <div class="pending-row">
                             <div class="pending-thumb"></div>
                             <div>
-                                <div style="font-size: 14px; font-weight: 700; color: var(--terracotta);">{{ $sub['name'] }}</div>
-                                <div style="font-size: 12px; color: var(--muted);">{{ $sub['author'] }} &middot; Status: <strong>{{ ucfirst($sub['status']) }}</strong></div>
+                                <div style="font-size: 14px; font-weight: 700; color: var(--terracotta);">
+                                    {{ $sub['name'] }}
+                                    <span style="font-size: 11px; font-weight: 500; color: var(--muted);">({{ $sub['label'] }})</span>
+                                </div>
+                                <div style="font-size: 12px; color: var(--muted);">
+                                    {{ $sub['author'] }} &middot; Status: <strong>{{ ucfirst($sub['status']) }}</strong>
+                                </div>
                             </div>
 
-                            <a href="{{ route('food.detail', $sub['slug']) }}" class="action-btn review">Review</a>
+                            @if (!empty($sub['slug']))
+                                <a href="{{ route('food.detail', $sub['slug']) }}" class="action-btn review">Review</a>
+                            @endif
 
                             <div style="display: flex; gap: 6px;">
-                                <form action="{{ route('admin.submission.status', $sub['slug']) }}" method="POST">
-                                    @csrf
-                                    <input type="hidden" name="status" value="approved">
-                                    <button type="submit" class="action-btn approve">Approve</button>
-                                </form>
-                                <form action="{{ route('admin.submission.status', $sub['slug']) }}" method="POST">
-                                    @csrf
-                                    <input type="hidden" name="status" value="rejected">
-                                    <button type="submit" class="action-btn reject">Reject</button>
-                                </form>
+                                @if ($sub['type'] === 'recipe' && !empty($sub['model']))
+                                    <form action="{{ route('recipes.approve', $sub['model']) }}" method="POST">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" class="action-btn approve">Approve</button>
+                                    </form>
+                                    <form action="{{ route('recipes.reject', $sub['model']) }}" method="POST">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="submit" class="action-btn reject">Reject</button>
+                                    </form>
+                                @else
+                                    <form action="{{ route('admin.submission.status', $sub['slug'] ?: $sub['id']) }}" method="POST">
+                                        @csrf
+                                        <input type="hidden" name="type" value="{{ $sub['type'] }}">
+                                        <input type="hidden" name="id" value="{{ $sub['id'] }}">
+                                        <input type="hidden" name="status" value="approved">
+                                        <button type="submit" class="action-btn approve">Approve</button>
+                                    </form>
+                                    <form action="{{ route('admin.submission.status', $sub['slug'] ?: $sub['id']) }}" method="POST">
+                                        @csrf
+                                        <input type="hidden" name="type" value="{{ $sub['type'] }}">
+                                        <input type="hidden" name="id" value="{{ $sub['id'] }}">
+                                        <input type="hidden" name="status" value="rejected">
+                                        <button type="submit" class="action-btn reject">Reject</button>
+                                    </form>
+                                @endif
                             </div>
                         </div>
-                    @endforeach
+                    @empty
+                        <p style="font-size: 13px; color: var(--muted); margin: 8px 0;">Tidak ada kiriman yang menunggu persetujuan.</p>
+                    @endforelse
                 </div>
             </div>
         </div>
