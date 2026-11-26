@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\CulinaryStory;
 use App\Models\Food;
 use App\Models\Recipe;
+use App\Models\Review;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -95,7 +96,24 @@ class PageController extends Controller
             }
         }
 
-        return view('food-detail', compact('food', 'foods', 'relatedFoods', 'isFavorited'));
+        $reviews = collect();
+        $averageRating = $food['rating'] ?? 0;
+        $reviewsCount = $food['reviews_count'] ?? 0;
+
+        if ($food) {
+            $foodModel = Food::where('slug', $food['slug'])->first();
+
+            if ($foodModel) {
+                $reviews = $foodModel->reviews()->with('user')->latest()->get();
+
+                if ($reviews->isNotEmpty()) {
+                    $reviewsCount = $reviews->count();
+                    $averageRating = round((float) $reviews->avg('rating'), 1);
+                }
+            }
+        }
+
+        return view('food-detail', compact('food', 'relatedFoods', 'isFavorited', 'reviews', 'averageRating', 'reviewsCount'));
     }
 
     public function recipe(Request $request): View
@@ -353,5 +371,32 @@ class PageController extends Controller
         ));
 
         return view('favorites', compact('foods'));
+    }
+
+    public function storeReview(Request $request, string $slug): RedirectResponse
+    {
+        $validated = $request->validate([
+            'rating' => ['required', 'integer', 'min:1', 'max:5'],
+            'comment' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $food = Food::where('slug', $slug)->first();
+
+        if (! $food) {
+            return back()->with('error', 'Data makanan tidak ditemukan di database.');
+        }
+
+        Review::updateOrCreate(
+            [
+                'user_id' => Auth::id(),
+                'food_id' => $food->id,
+            ],
+            [
+                'rating' => (int) $validated['rating'],
+                'comment' => $validated['comment'] ?? null,
+            ]
+        );
+
+        return back()->with('success', 'Ulasan berhasil disimpan!');
     }
 }

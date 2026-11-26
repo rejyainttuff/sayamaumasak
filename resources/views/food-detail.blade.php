@@ -139,6 +139,60 @@
             </div>
         </section>
     </section>
+    <section class="recipe-container" style="margin-top: 32px;">
+        <h2>Ulasan ({{ $reviewsCount }}) &mdash; {{ number_format((float) $averageRating, 1) }} / 5</h2>
+
+        @if ($errors->any())
+            <div class="alert-banner error" style="margin-bottom: 16px;">
+                <ul>
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
+        @auth
+            <form action="{{ route('reviews.store', $food['slug']) }}" method="POST" style="margin-bottom: 24px;">
+                @csrf
+                <div style="margin-bottom: 12px;">
+                    <label for="rating">Rating (1 - 5)</label>
+                    <select name="rating" id="rating" required>
+                        <option value="">Pilih rating</option>
+                        @for ($i = 5; $i >= 1; $i--)
+                            <option value="{{ $i }}" {{ (string) old('rating') === (string) $i ? 'selected' : '' }}>
+                                {{ $i }} Bintang
+                            </option>
+                        @endfor
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <label for="comment">Komentar (opsional)</label>
+                    <textarea name="comment" id="comment" rows="3" placeholder="Tulis pengalamanmu mencoba resep ini...">{{ old('comment') }}</textarea>
+                </div>
+
+                <button type="submit" class="btn-terracotta rect">Kirim Ulasan</button>
+            </form>
+        @else
+            <p style="margin-bottom: 20px;">
+                <a href="{{ route('login') }}">Masuk</a> terlebih dahulu untuk menulis ulasan.
+            </p>
+        @endauth
+
+        @forelse ($reviews as $review)
+            <div style="border-top: 1px solid #e5e7eb; padding: 12px 0;">
+                <strong>{{ $review->user->name ?? 'Pengguna' }}</strong>
+                <span>&middot; {{ $review->rating }}/5</span>
+                <div><small>{{ $review->created_at?->format('d/m/Y') }}</small></div>
+                @if ($review->comment)
+                    <p style="margin-top: 6px;">{{ $review->comment }}</p>
+                @endif
+            </div>
+        @empty
+            <p>Belum ada ulasan tersimpan di database untuk makanan ini.</p>
+        @endforelse
+    </section>
 @endsection
 
 @push('scripts')

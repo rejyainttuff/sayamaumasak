@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['name', 'email', 'role', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -49,5 +50,10 @@ class User extends Authenticatable
     public function favoriteFoods(): BelongsToMany
     {
         return $this->belongsToMany(Food::class, 'food_user')->withTimestamps();
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
     }
 }

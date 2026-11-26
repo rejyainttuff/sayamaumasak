@@ -38,4 +38,9 @@ class Food extends Model
     {
         return $this->belongsToMany(User::class, 'food_user')->withTimestamps();
     }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
+    }
 }
