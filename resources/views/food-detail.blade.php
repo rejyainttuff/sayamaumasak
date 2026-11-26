@@ -16,6 +16,10 @@
                 <div class="alert-banner success">{{ session('success') }}</div>
             @endif
 
+            @if (session('error'))
+                <div class="alert-banner error">{{ session('error') }}</div>
+            @endif
+
             <div class="detail-bento">
                 <div class="detail-left-col">
                     <div class="detail-hero-split">
@@ -28,7 +32,7 @@
 
                             <button
                                 type="button"
-                                class="recipe-card-heart js-favorite-toggle"
+                                class="recipe-card-heart js-favorite-toggle {{ ! empty($isFavorited) ? 'is-saved' : '' }}"
                                 data-slug="{{ $food['slug'] }}"
                                 aria-label="Simpan {{ $food['name'] }} ke favorit"
                                 title="Simpan ke Favorit"
@@ -42,10 +46,21 @@
                         <div class="detail-info-col">
                             <div class="detail-pill-row">
                                 <a href="{{ route('explore') }}" class="pill-tag">&larr; Kembali</a>
-                                <button type="button" class="pill-tag js-favorite-toggle" data-slug="{{ $food['slug'] }}">
-                                    <span>&#9829;</span>
-                                    <span class="js-fav-label">Simpan Resep</span>
-                                </button>
+
+                                @auth
+                                    <form action="{{ route('favorites.toggle', $food['slug']) }}" method="POST" style="display: inline;">
+                                        @csrf
+                                        <button type="submit" class="pill-tag">
+                                            <span>&#9829;</span>
+                                            <span>{{ ! empty($isFavorited) ? 'Tersimpan di Favorit' : 'Simpan Resep' }}</span>
+                                        </button>
+                                    </form>
+                                @else
+                                    <button type="button" class="pill-tag js-favorite-toggle" data-slug="{{ $food['slug'] }}">
+                                        <span>&#9829;</span>
+                                        <span class="js-fav-label">Simpan Resep</span>
+                                    </button>
+                                @endauth
                             </div>
 
                             <h1 class="detail-title">

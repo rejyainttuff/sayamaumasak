@@ -34,7 +34,7 @@
                     </button>
                 </form>
 
-                <a href="{{ route('account') }}" class="recipe-icon-btn {{ request()->routeIs('account', 'favorites') ? 'active' : '' }}" title="Akun Saya">
+                <a href="{{ auth()->check() ? route('account') : route('account') }}" class="recipe-icon-btn {{ request()->routeIs('account', 'favorites') ? 'active' : '' }}" title="{{ auth()->check() ? auth()->user()->name : 'Akun Saya' }}">
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                         <circle cx="12" cy="7" r="4" />
@@ -73,7 +73,9 @@
                     <a href="{{ route('stories') }}">Cerita</a>
                     <a href="{{ route('about') }}">Tentang Kami</a>
                     <a href="{{ route('account') }}">Akun</a>
-                    <a href="{{ route('login') }}">Login</a>
+                    @guest
+                        <a href="{{ route('login') }}">Login</a>
+                    @endguest
                     <a href="{{ route('admin.dashboard') }}">Admin</a>
                 </div>
             </div>

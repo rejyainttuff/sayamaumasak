@@ -38,7 +38,7 @@
                     <div class="alert-banner error">{{ $errors->first() }}</div>
                 @endif
 
-                <form action="{{ route('login.submit') }}" method="POST">
+                <form action="{{ route('login.post') }}" method="POST">
                     @csrf
 
                     <div class="input-icon-wrap">
@@ -59,7 +59,7 @@
 
                     <div class="auth-row-between">
                         <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
-                            <input type="checkbox" name="remember">
+                            <input type="checkbox" name="remember" @checked(old('remember'))>
                             <span>Ingat saya</span>
                         </label>
                         <a href="{{ route('password.change') }}">Lupa password?</a>
@@ -74,7 +74,8 @@
             </div>
         </div>
     </div>
-    <script src="{{ asset('Assets/js/animations.js') }}" defer></script>
+
+    <script src="{{ asset('Assets/js/animations.js') }}?v={{ filemtime(public_path('Assets/js/animations.js')) }}" defer></script>
 </body>
 
 </html>

@@ -2,13 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Category;
+use App\Models\CulinaryStory;
+use App\Models\Food;
+use App\Models\Recipe;
 use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Throwable;
 
 class PageController extends Controller
 {
@@ -28,8 +34,8 @@ class PageController extends Controller
         $selectedRegion = trim((string) $request->query('region', ''));
         $selectedDifficulty = trim((string) $request->query('difficulty', ''));
 
-        $categories = ['Makanan', 'Minuman', 'Jajan'];
-        $regions = $allFoods->pluck('region')->unique()->sort()->values()->all();
+        $categories = $this->getCategoriesList();
+        $regions = $allFoods->pluck('region')->filter()->unique()->sort()->values()->all();
         $difficulties = ['Mudah', 'Sedang', 'Sulit'];
 
         $filtered = $allFoods
@@ -78,12 +84,20 @@ class PageController extends Controller
             ->values()
             ->all();
 
-        return view('food-detail', compact('food', 'foods', 'relatedFoods'));
+        $isFavorited = false;
+        if (Auth::check() && $this->hasDatabaseTable('foods') && $this->hasDatabaseTable('food_user')) {
+            $foodModel = Food::where('slug', $food['slug'])->first();
+            if ($foodModel) {
+                $isFavorited = Auth::user()->favoriteFoods()->where('foods.id', $foodModel->id)->exists();
+            }
+        }
+
+        return view('food-detail', compact('food', 'foods', 'relatedFoods', 'isFavorited'));
     }
 
     public function createRecipe(): View
     {
-        $categories = ['Makanan', 'Minuman', 'Jajan'];
+        $categories = $this->getCategoriesList();
         $difficulties = ['Mudah', 'Sedang', 'Sulit'];
         $regions = ['Badung', 'Bangli', 'Buleleng', 'Denpasar', 'Gianyar', 'Jembrana', 'Karangasem', 'Klungkung', 'Tabanan'];
 
@@ -96,7 +110,7 @@ class PageController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'region' => ['required', 'string', 'max:80'],
             'difficulty' => ['required', 'in:Mudah,Sedang,Sulit'],
-            'category' => ['required', 'in:Makanan,Minuman,Jajan'],
+            'category' => ['required', 'string', 'max:80'],
             'cook_time' => ['required', 'string', 'max:60'],
             'servings' => ['nullable', 'string', 'max:40'],
             'video_url' => ['nullable', 'string', 'max:255'],
@@ -160,41 +174,94 @@ class PageController extends Controller
             ->with('success', 'Resep "'.$validated['name'].'" berhasil dikirim dan menunggu persetujuan admin!');
     }
 
+    public function toggleFavorite(Request $request, string $slug): RedirectResponse
+    {
+        $user = Auth::user();
+        $food = $this->hasDatabaseTable('foods') ? Food::where('slug', $slug)->first() : null;
+
+        if (! $food || ! $user) {
+            return back()->with('error', 'Data makanan tidak ditemukan di database.');
+        }
+
+        $exists = $user->favoriteFoods()->where('foods.id', $food->id)->exists();
+
+        if ($exists) {
+            $user->favoriteFoods()->detach($food->id);
+            $message = 'Makanan dihapus dari daftar favorit.';
+        } else {
+            $user->favoriteFoods()->attach($food->id);
+            $message = 'Makanan berhasil disimpan ke favorit!';
+        }
+
+        return back()->with('success', $message);
+    }
+
     public function favorites(): View
     {
-        $foods = $this->getAllCulinaryData();
+        $allFoods = $this->getAllCulinaryData();
+
+        if (Auth::check() && $this->hasDatabaseTable('food_user')) {
+            $favoriteSlugs = Auth::user()->favoriteFoods()->pluck('slug')->all();
+            $foods = array_values(array_filter(
+                $allFoods,
+                fn (array $food): bool => in_array($food['slug'], $favoriteSlugs, true)
+            ));
+        } else {
+            $foods = $allFoods;
+        }
 
         return view('favorites', compact('foods'));
     }
 
     public function stories(): View
     {
-        $stories = [
-            [
-                'title' => 'Filosofi Base Genep dalam Dapur Tradisional Bali',
-                'region' => 'Denpasar',
-                'read_time' => '4 menit baca',
-                'excerpt' => 'Base genep bukan sekadar racikan bumbu, melainkan harmoni rasa yang diwariskan turun-temurun untuk upacara adat hingga santapan keluarga.',
-            ],
-            [
-                'title' => 'Tradisi Megibung di Karangasem: Makan Bersama Tanpa Sekat',
-                'region' => 'Karangasem',
-                'read_time' => '5 menit baca',
-                'excerpt' => 'Duduk melingkar menyantap nasi dan lauk khas Bali dalam satu dulang mengajarkan kebersamaan dan rasa syukur masyarakat Bali.',
-            ],
-            [
-                'title' => 'Rahasia Aroma Asap Ayam Betutu Gilimanuk',
-                'region' => 'Jembrana',
-                'read_time' => '3 menit baca',
-                'excerpt' => 'Proses memasak perlahan dalam balutan daun pisang dan bara sekam menghasilkan daging ayam empuk beraroma rempah yang memikat.',
-            ],
-            [
-                'title' => 'Jaje Laklak: Manisnya Jajanan Pasar Pagi di Bali',
-                'region' => 'Klungkung',
-                'read_time' => '3 menit baca',
-                'excerpt' => 'Dipanggang di atas cetakan tanah liat dengan aroma daun pandan, jaje laklak selalu menemani secangkir kopi Bali di pagi hari.',
-            ],
-        ];
+        $stories = [];
+
+        if ($this->hasDatabaseTable('culinary_stories')) {
+            try {
+                $dbStories = CulinaryStory::with('food')->latest()->get();
+                foreach ($dbStories as $item) {
+                    $plain = trim(strip_tags((string) $item->content));
+                    $stories[] = [
+                        'title' => (string) ($item->title ?: ($item->food?->name ?? 'Kisah Kuliner Bali')),
+                        'region' => (string) ($item->food?->origin_area ?: 'Bali'),
+                        'read_time' => '4 menit baca',
+                        'excerpt' => strlen($plain) > 180 ? substr($plain, 0, 177).'...' : $plain,
+                    ];
+                }
+            } catch (Throwable) {
+                $stories = [];
+            }
+        }
+
+        if ($stories === []) {
+            $stories = [
+                [
+                    'title' => 'Filosofi Base Genep dalam Dapur Tradisional Bali',
+                    'region' => 'Denpasar',
+                    'read_time' => '4 menit baca',
+                    'excerpt' => 'Base genep bukan sekadar racikan bumbu, melainkan harmoni rasa yang diwariskan turun-temurun untuk upacara adat hingga santapan keluarga.',
+                ],
+                [
+                    'title' => 'Tradisi Megibung di Karangasem: Makan Bersama Tanpa Sekat',
+                    'region' => 'Karangasem',
+                    'read_time' => '5 menit baca',
+                    'excerpt' => 'Duduk melingkar menyantap nasi dan lauk khas Bali dalam satu dulang mengajarkan kebersamaan dan rasa syukur masyarakat Bali.',
+                ],
+                [
+                    'title' => 'Rahasia Aroma Asap Ayam Betutu Gilimanuk',
+                    'region' => 'Jembrana',
+                    'read_time' => '3 menit baca',
+                    'excerpt' => 'Proses memasak perlahan dalam balutan daun pisang dan bara sekam menghasilkan daging ayam empuk beraroma rempah yang memikat.',
+                ],
+                [
+                    'title' => 'Jaje Laklak: Manisnya Jajanan Pasar Pagi di Bali',
+                    'region' => 'Klungkung',
+                    'read_time' => '3 menit baca',
+                    'excerpt' => 'Dipanggang di atas cetakan tanah liat dengan aroma daun pandan, jaje laklak selalu menemani secangkir kopi Bali di pagi hari.',
+                ],
+            ];
+        }
 
         return view('stories', compact('stories'));
     }
@@ -202,61 +269,6 @@ class PageController extends Controller
     public function about(): View
     {
         return view('about');
-    }
-
-    public function login(): View
-    {
-        return view('auth.login');
-    }
-
-    public function authenticate(Request $request): RedirectResponse
-    {
-        $credentials = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string'],
-        ]);
-
-        if (Auth::attempt($credentials, $request->boolean('remember'))) {
-            $request->session()->regenerate();
-
-            if (Auth::user()?->isAdmin()) {
-                return redirect()->route('admin.dashboard')->with('success', 'Selamat datang kembali, Admin!');
-            }
-
-            return redirect()->route('account')->with('success', 'Berhasil masuk ke akun Bali Culinary.');
-        }
-
-        return back()
-            ->withInput($request->only('email'))
-            ->withErrors(['email' => 'Email atau password tidak sesuai.']);
-    }
-
-    public function register(): View
-    {
-        return view('auth.register');
-    }
-
-    public function storeRegister(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'username' => ['required', 'string', 'max:50'],
-            'name' => ['required', 'string', 'max:120'],
-            'email' => ['required', 'email', 'max:150', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
-            'terms' => ['accepted'],
-        ]);
-
-        $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'role' => 'user',
-            'password' => Hash::make($validated['password']),
-        ]);
-
-        Auth::login($user);
-        $request->session()->regenerate();
-
-        return redirect()->route('account')->with('success', 'Akun berhasil dibuat! Selamat datang di Bali Culinary.');
     }
 
     public function changePassword(): View
@@ -271,26 +283,19 @@ class PageController extends Controller
             'password' => ['required', 'string', 'min:6', 'confirmed'],
         ]);
 
-        $user = User::where('email', $validated['email'])->first();
+        if ($this->hasDatabaseTable('users')) {
+            $user = User::where('email', $validated['email'])->first();
 
-        if ($user) {
-            $user->update(['password' => Hash::make($validated['password'])]);
+            if ($user) {
+                $user->update(['password' => Hash::make($validated['password'])]);
 
-            return redirect()->route('login')->with('success', 'Password berhasil diperbarui. Silakan login kembali.');
+                return redirect()->route('login')->with('success', 'Password berhasil diperbarui. Silakan login kembali.');
+            }
         }
 
         return back()
             ->withInput($request->only('email'))
             ->with('success', 'Permintaan pembaruan password untuk '.$validated['email'].' telah diproses.');
-    }
-
-    public function logout(Request $request): RedirectResponse
-    {
-        Auth::logout();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return redirect()->route('home')->with('success', 'Anda telah keluar dari akun.');
     }
 
     public function account(): View
@@ -322,7 +327,7 @@ class PageController extends Controller
                 'date' => '5 hari lalu',
             ],
             [
-                'dish' => 'Ayam Betutu Gilimanuk',
+                'dish' => 'Ayam Betutu',
                 'slug' => 'ayam-betutu-gilimanuk',
                 'rating' => 4,
                 'comment' => 'Dagingnya empuk sampai ke tulang, resep keluarga terbaik!',
@@ -355,7 +360,7 @@ class PageController extends Controller
             ],
             [
                 'slug' => 'sate-lilit-ikan',
-                'name' => 'Sate Lilit Ikan',
+                'name' => 'Sate Lilit',
                 'author' => 'oleh Komang Adi',
                 'status' => $statusOverrides['sate-lilit-ikan'] ?? 'rejected',
                 'time' => '3 jam lalu',
@@ -412,6 +417,34 @@ class PageController extends Controller
     }
 
     /**
+     * @return array<int, string>
+     */
+    private function getCategoriesList(): array
+    {
+        if ($this->hasDatabaseTable('categories')) {
+            try {
+                $dbCategories = Category::orderBy('name')->pluck('name')->all();
+                if ($dbCategories !== []) {
+                    return $dbCategories;
+                }
+            } catch (Throwable) {
+                // Fallback to default Balinese culinary categories.
+            }
+        }
+
+        return ['Makanan', 'Minuman', 'Jajan'];
+    }
+
+    private function hasDatabaseTable(string $table): bool
+    {
+        try {
+            return Schema::hasTable($table);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     private function getAllCulinaryData(): array
@@ -425,6 +458,104 @@ class PageController extends Controller
      * @return array<int, array<string, mixed>>
      */
     private function getCulinaryData(): array
+    {
+        if ($this->hasDatabaseTable('foods')) {
+            try {
+                $dbFoods = Food::with([
+                    'category',
+                    'recipes' => function ($query) {
+                        $query->where('approval_status', 'approved')
+                            ->with(['recipeIngredients.ingredient', 'recipeSteps'])
+                            ->latest();
+                    },
+                    'culinaryStories',
+                ])->latest()->get();
+
+                if ($dbFoods->isNotEmpty()) {
+                    return $dbFoods->map(function (Food $food, int $index): array {
+                        /** @var Recipe|null $approvedRecipe */
+                        $approvedRecipe = $food->recipes->first();
+                        $story = $food->culinaryStories->first();
+
+                        $ingredients = [];
+                        if ($approvedRecipe) {
+                            $ingredients = $approvedRecipe->recipeIngredients
+                                ->map(function ($item): string {
+                                    $name = $item->ingredient?->name ?? 'Bahan';
+                                    $amount = trim((string) ($item->amount ?? ''));
+                                    $unit = trim((string) ($item->unit ?? ''));
+                                    $qty = trim($amount.' '.$unit);
+
+                                    return $qty !== '' ? "{$qty} {$name}" : $name;
+                                })
+                                ->filter()
+                                ->values()
+                                ->all();
+                        }
+
+                        $steps = [];
+                        if ($approvedRecipe) {
+                            $steps = $approvedRecipe->recipeSteps
+                                ->sortBy('step_number')
+                                ->pluck('instruction')
+                                ->filter()
+                                ->values()
+                                ->all();
+                        }
+
+                        $cookMinutes = $approvedRecipe?->cook_time_minutes ?? $approvedRecipe?->prep_time_minutes;
+                        $cookTime = $cookMinutes ? $cookMinutes.' menit' : '30 menit';
+
+                        $rawDifficulty = strtolower(trim((string) ($approvedRecipe?->difficulty ?? '')));
+                        $difficulty = match ($rawDifficulty) {
+                            'easy', 'mudah' => 'Mudah',
+                            'hard', 'sulit' => 'Sulit',
+                            'medium', 'sedang' => 'Sedang',
+                            default => 'Sedang',
+                        };
+
+                        $storyText = $story ? trim(strip_tags((string) $story->content)) : '';
+                        $fallbackDesc = $storyText !== ''
+                            ? (strlen($storyText) > 160 ? substr($storyText, 0, 157).'...' : $storyText)
+                            : 'Kuliner khas Bali di Bali Culinary.';
+                        $description = (string) ($food->short_description ?: $fallbackDesc);
+                        $history = $storyText !== '' ? $storyText : $description;
+                        $image = (string) ($food->thumbnail ?: ($story?->thumbnail ?? 'Assets/images/lawar.jpg'));
+
+                        return [
+                            'id' => $food->id,
+                            'slug' => $food->slug,
+                            'name' => $food->name,
+                            'region' => (string) ($food->origin_area ?: 'Bali'),
+                            'category' => (string) ($food->category?->name ?? 'Makanan'),
+                            'difficulty' => $difficulty,
+                            'cook_time' => $cookTime,
+                            'servings' => ($approvedRecipe?->servings ? $approvedRecipe->servings.' porsi' : '4 porsi'),
+                            'rating' => 4.8,
+                            'reviews_count' => max(1, $food->recipes->count()),
+                            'is_popular' => $index < 4,
+                            'description' => $description,
+                            'history' => $history,
+                            'ingredient_groups' => ['Bahan Utama' => $ingredients !== [] ? $ingredients : ['Bumbu base genep khas Bali']],
+                            'ingredients' => $ingredients !== [] ? $ingredients : ['Bumbu base genep khas Bali'],
+                            'steps' => $steps !== [] ? $steps : ['Siapkan bahan dan bumbu base genep, lalu olah sesuai tradisi kuliner Bali.'],
+                            'notes' => 'Disajikan melalui data kuliner dan resep yang telah disetujui di Bali Culinary.',
+                            'image' => $image,
+                        ];
+                    })->all();
+                }
+            } catch (Throwable) {
+                // Fallback to curated Balinese culinary dataset below.
+            }
+        }
+
+        return $this->getDefaultCulinaryData();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function getDefaultCulinaryData(): array
     {
         return [
             [

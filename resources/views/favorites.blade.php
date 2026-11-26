@@ -17,56 +17,78 @@
 
     <section class="home-section">
         <div class="recipe-container">
-            <div class="recipe-grid cols-3" id="favorites-grid">
-                @foreach ($foods as $food)
-                    @include('partials.recipe-card', ['food' => $food])
-                @endforeach
-            </div>
+            @if (session('success'))
+                <div class="alert-banner success">{{ session('success') }}</div>
+            @endif
 
-            <div class="recipe-empty" id="favorites-empty" style="display: none;">
-                <h3 style="font-family: 'Playfair Display', serif; color: var(--terracotta); margin: 0 0 8px;">Belum ada resep favorit</h3>
-                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px;">Klik ikon hati pada kartu resep atau tombol "Simpan Resep" di halaman detail untuk menyimpannya di sini.</p>
-                <a href="{{ route('explore') }}" class="btn-terracotta">Jelajahi Resep</a>
-            </div>
+            @auth
+                @if (count($foods) > 0)
+                    <div class="recipe-grid cols-3">
+                        @foreach ($foods as $food)
+                            @include('partials.recipe-card', ['food' => $food])
+                        @endforeach
+                    </div>
+                @else
+                    <div class="recipe-empty">
+                        <h3 style="font-family: 'Playfair Display', serif; color: var(--terracotta); margin: 0 0 8px;">Belum ada resep favorit</h3>
+                        <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px;">Buka halaman detail resep dan klik tombol "Simpan Resep" untuk menyimpannya di akunmu.</p>
+                        <a href="{{ route('explore') }}" class="btn-terracotta">Jelajahi Resep</a>
+                    </div>
+                @endif
+            @else
+                <div class="recipe-grid cols-3" id="favorites-grid">
+                    @foreach ($foods as $food)
+                        @include('partials.recipe-card', ['food' => $food])
+                    @endforeach
+                </div>
+
+                <div class="recipe-empty" id="favorites-empty" style="display: none;">
+                    <h3 style="font-family: 'Playfair Display', serif; color: var(--terracotta); margin: 0 0 8px;">Belum ada resep favorit</h3>
+                    <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px;">Klik ikon hati pada kartu resep atau tombol "Simpan Resep" di halaman detail untuk menyimpannya di sini.</p>
+                    <a href="{{ route('explore') }}" class="btn-terracotta">Jelajahi Resep</a>
+                </div>
+            @endauth
         </div>
     </section>
 @endsection
 
-@push('scripts')
-    <script>
-        (function () {
-            function filterFavorites(favs) {
-                const grid = document.getElementById('favorites-grid');
-                const empty = document.getElementById('favorites-empty');
-                if (!grid || !empty) {
-                    return;
+@guest
+    @push('scripts')
+        <script>
+            (function () {
+                function filterFavorites(favs) {
+                    const grid = document.getElementById('favorites-grid');
+                    const empty = document.getElementById('favorites-empty');
+                    if (!grid || !empty) {
+                        return;
+                    }
+
+                    let visibleCount = 0;
+                    grid.querySelectorAll('[data-food-slug]').forEach(function (card) {
+                        const slug = card.getAttribute('data-food-slug');
+                        const show = favs.includes(slug);
+                        card.style.display = show ? '' : 'none';
+                        if (show) {
+                            visibleCount++;
+                        }
+                    });
+
+                    grid.style.display = visibleCount > 0 ? '' : 'none';
+                    empty.style.display = visibleCount > 0 ? 'none' : '';
                 }
 
-                let visibleCount = 0;
-                grid.querySelectorAll('[data-food-slug]').forEach(function (card) {
-                    const slug = card.getAttribute('data-food-slug');
-                    const show = favs.includes(slug);
-                    card.style.display = show ? '' : 'none';
-                    if (show) {
-                        visibleCount++;
-                    }
+                window.addEventListener('favorites:updated', function (e) {
+                    filterFavorites(e.detail.favs || []);
                 });
 
-                grid.style.display = visibleCount > 0 ? '' : 'none';
-                empty.style.display = visibleCount > 0 ? 'none' : '';
-            }
-
-            window.addEventListener('favorites:updated', function (e) {
-                filterFavorites(e.detail.favs || []);
-            });
-
-            try {
-                const raw = localStorage.getItem('baliculinary_favorites');
-                const parsed = raw ? JSON.parse(raw) : [];
-                filterFavorites(Array.isArray(parsed) ? parsed : []);
-            } catch (e) {
-                filterFavorites([]);
-            }
-        })();
-    </script>
-@endpush
+                try {
+                    const raw = localStorage.getItem('baliculinary_favorites');
+                    const parsed = raw ? JSON.parse(raw) : [];
+                    filterFavorites(Array.isArray(parsed) ? parsed : []);
+                } catch (e) {
+                    filterFavorites([]);
+                }
+            })();
+        </script>
+    @endpush
+@endguest

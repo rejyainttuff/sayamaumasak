@@ -27,7 +27,7 @@
                 <div class="alert-banner error">{{ $errors->first() }}</div>
             @endif
 
-            <form action="{{ route('register.submit') }}" method="POST">
+            <form action="{{ route('register.post') }}" method="POST">
                 @csrf
 
                 <div class="input-icon-wrap">
@@ -35,7 +35,7 @@
                         <circle cx="12" cy="8" r="4" />
                         <path d="M20 21a8 8 0 1 0-16 0" />
                     </svg>
-                    <input type="text" name="username" value="{{ old('username') }}" placeholder="Username" required>
+                    <input type="text" name="username" value="{{ old('username') }}" placeholder="Username">
                 </div>
 
                 <div class="input-icon-wrap">
@@ -61,7 +61,7 @@
                         <rect x="3" y="11" width="18" height="11" rx="2" />
                         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                     </svg>
-                    <input type="password" name="password" placeholder="Password" required>
+                    <input type="password" name="password" placeholder="Password (minimal 8 karakter)" required>
                 </div>
 
                 <div class="input-icon-wrap">
@@ -82,7 +82,8 @@
             </form>
         </div>
     </div>
-    <script src="{{ asset('Assets/js/animations.js') }}" defer></script>
+
+    <script src="{{ asset('Assets/js/animations.js') }}?v={{ filemtime(public_path('Assets/js/animations.js')) }}" defer></script>
 </body>
 
 </html>
