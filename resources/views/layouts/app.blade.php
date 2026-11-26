@@ -4,70 +4,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'SayaMauMasak — Dari Rasa Ke Hati')</title>
+    <title>@yield('title', 'Bali Culinary — Dari Rasa Ke Hati')</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ asset('Assets/css/recipes.css') }}">
+    <link rel="stylesheet" href="{{ asset('Assets/css/recipes.css') }}?v={{ filemtime(public_path('Assets/css/recipes.css')) }}">
 </head>
 
 <body class="recipe-page">
     <nav class="recipe-nav">
         <div class="recipe-nav-inner">
-            <a href="{{ route('home') }}" class="recipe-brand">SayaMau<span>Masak</span></a>
+            <a href="{{ route('home') }}" class="bali-brand">Bali <span>Culinary</span></a>
 
-            <div class="recipe-nav-links">
+            <div class="recipe-nav-links" id="main-nav-links">
                 <a href="{{ route('about') }}" class="{{ request()->routeIs('about') ? 'active' : '' }}">Tentang Kami</a>
                 <a href="{{ route('home') }}" class="{{ request()->routeIs('home') ? 'active' : '' }}">Beranda</a>
-                <a href="{{ route('explore') }}" class="{{ request()->routeIs('explore') ? 'active' : '' }}">Jelajah</a>
-                <a href="{{ route('recipe') }}" class="{{ request()->routeIs('recipe', 'recipe.create') ? 'active' : '' }}">Aneka Resep</a>
+                <a href="{{ route('explore') }}" class="{{ request()->routeIs('explore', 'recipe', 'recipe.create', 'food.detail') ? 'active' : '' }}">Resep</a>
                 <a href="{{ route('stories') }}" class="{{ request()->routeIs('stories') ? 'active' : '' }}">Cerita</a>
             </div>
 
             <div class="recipe-nav-right">
                 <form action="{{ route('explore') }}" method="GET" class="recipe-nav-search">
+                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari resep Bali..." aria-label="Cari resep Bali">
                     <button type="submit" aria-label="Cari resep">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                             <circle cx="11" cy="11" r="7" />
                             <line x1="21" y1="21" x2="16.65" y2="16.65" />
                         </svg>
                     </button>
-                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari resep Bali..." aria-label="Cari resep Bali">
                 </form>
 
-                <a href="{{ route('recipe.create') }}" class="recipe-icon-btn {{ request()->routeIs('recipe.create') ? 'active' : '' }}" title="Bagikan Resep">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                        <line x1="12" y1="5" x2="12" y2="19" />
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                </a>
-
-                <a href="{{ route('favorites') }}" class="recipe-icon-btn {{ request()->routeIs('favorites') ? 'active' : '' }}" title="Resep Tersimpan">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                <a href="{{ auth()->check() ? route('account') : route('account') }}" class="recipe-icon-btn {{ request()->routeIs('account', 'favorites') ? 'active' : '' }}" title="{{ auth()->check() ? auth()->user()->name : 'Akun Saya' }}">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
                     </svg>
                     <span class="recipe-fav-count" id="nav-fav-count">0</span>
                 </a>
 
-                @auth
-                    @if (in_array(auth()->user()->role, ['admin', 'helper'], true))
-                        <a href="{{ route('recipes.index') }}">Kelola Resep</a>
-                    @endif
-
-                    @if (auth()->user()->role === 'admin')
-                        <a href="{{ route('foods.index') }}">Kelola Makanan</a>
-                    @endif
-
-                    <span>{{ auth()->user()->name }} ({{ auth()->user()->role }})</span>
-
-                    <form action="{{ route('logout') }}" method="POST" style="display: inline;">
-                        @csrf
-                        <button type="submit">Keluar</button>
-                    </form>
-                @else
-                    <a href="{{ route('login') }}">Masuk</a>
-                @endauth
-
+                <button type="button" class="nav-mobile-toggle" id="nav-mobile-toggle" aria-label="Buka menu">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <line x1="3" y1="6" x2="21" y2="6" />
+                        <line x1="3" y1="12" x2="21" y2="12" />
+                        <line x1="3" y1="18" x2="21" y2="18" />
+                    </svg>
+                </button>
             </div>
         </div>
     </nav>
@@ -76,37 +57,42 @@
         @yield('content')
     </main>
 
-    <div class="footer-wave-wrap" aria-hidden="true">
-        <svg viewBox="0 0 1440 80" preserveAspectRatio="none">
-            <path d="M0,45 C320,90 1040,0 1440,42 L1440,80 L0,80 Z" fill="#f6e7cd" />
-            <path d="M0,58 C360,92 1080,20 1440,54 L1440,80 L0,80 Z" fill="#899477" />
-        </svg>
-    </div>
-
-    <footer class="site-footer">
-        <div class="site-footer-inner">
-            <div>
-                <h2 class="site-footer-brand">SayaMauMasak</h2>
-                <p>Dari Rasa Ke Hati — melestarikan warisan kuliner tradisional Bali melalui resep autentik dan cerita dapur Nusantara.</p>
+    @hasSection('hide_footer')
+    @else
+        <footer class="bali-footer-wrap">
+            <div class="bali-footer-curve" aria-hidden="true"></div>
+            <div class="bali-footer-inner">
+                <div>
+                    <h2 class="bali-footer-brand">Bali Culinary</h2>
+                    <p class="bali-footer-desc">Dari Rasa Ke Hati — melestarikan kuliner tradisional Pulau Dewata.</p>
+                </div>
+                <div class="bali-footer-links">
+                    <a href="{{ route('home') }}">Beranda</a>
+                    <a href="{{ route('explore') }}">Resep</a>
+                    <a href="{{ route('recipe.create') }}">Bagikan Resep</a>
+                    <a href="{{ route('stories') }}">Cerita</a>
+                    <a href="{{ route('about') }}">Tentang Kami</a>
+                    <a href="{{ route('account') }}">Akun</a>
+                    @guest
+                        <a href="{{ route('login') }}">Login</a>
+                    @endguest
+                    <a href="{{ route('admin.dashboard') }}">Admin</a>
+                </div>
             </div>
-            <div class="site-footer-links">
-                <a href="{{ route('home') }}">Beranda</a>
-                <a href="{{ route('explore') }}">Jelajah Resep</a>
-                <a href="{{ route('recipe') }}">Aneka Resep</a>
-                <a href="{{ route('recipe.create') }}">Bagikan Resep</a>
-                <a href="{{ route('favorites') }}">Favorit</a>
-                <a href="{{ route('stories') }}">Cerita</a>
-                <a href="{{ route('about') }}">Tentang Kami</a>
-            </div>
-        </div>
-        <div class="site-footer-bottom">
-            &copy; {{ date('Y') }} SayaMauMasak. Kuliner Tradisional Bali.
-        </div>
-    </footer>
+        </footer>
+    @endif
 
     <script>
         (function () {
-            const STORAGE_KEY = 'sayamaumasak_favorites';
+            const STORAGE_KEY = 'baliculinary_favorites';
+
+            const toggleBtn = document.getElementById('nav-mobile-toggle');
+            const navLinks = document.getElementById('main-nav-links');
+            if (toggleBtn && navLinks) {
+                toggleBtn.addEventListener('click', function () {
+                    navLinks.classList.toggle('is-open');
+                });
+            }
 
             function getFavorites() {
                 try {
@@ -138,7 +124,7 @@
 
                     const label = btn.querySelector('.js-fav-label');
                     if (label) {
-                        label.textContent = isSaved ? 'Tersimpan di Favorit' : 'Simpan Resep';
+                        label.textContent = isSaved ? 'Tersimpan' : 'Simpan Resep';
                     }
                 });
 
@@ -170,6 +156,8 @@
             syncUI();
         })();
     </script>
+
+    <script src="{{ asset('Assets/js/animations.js') }}?v={{ filemtime(public_path('Assets/js/animations.js')) }}" defer></script>
 
     @stack('scripts')
 </body>

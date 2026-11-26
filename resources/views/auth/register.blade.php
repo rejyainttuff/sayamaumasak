@@ -1,72 +1,89 @@
-@extends('layouts.app')
+<!DOCTYPE html>
+<html lang="id">
 
-@section('title', 'Daftar Akun — SayaMauMasak')
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buat Akun — Bali Culinary</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ asset('Assets/css/recipes.css') }}?v={{ filemtime(public_path('Assets/css/recipes.css')) }}">
+</head>
 
-@section('content')
-<div style="max-width: 460px; margin: 40px auto; padding: 24px; background: #fffaf4; border: 1px solid #e6dccf; border-radius: 16px;">
-    <h1 style="margin: 0 0 8px; font-family: 'Playfair Display', serif; font-size: 28px; color: #2b1e16;">
-        Daftar Akun
-    </h1>
-    <p style="margin: 0 0 20px; font-size: 14px; color: #6e5d52;">
-        Buat akun baru untuk menyimpan resep favorit dan menulis ulasan.
-    </p>
+<body class="recipe-page">
+    <div class="auth-page">
+        <img src="{{ asset('Assets/images/decor-hibiscus.png') }}" alt="" class="corner-hibiscus top-left" aria-hidden="true">
+        <img src="{{ asset('Assets/images/decor-hibiscus.png') }}" alt="" class="corner-hibiscus bottom-right" aria-hidden="true">
 
-    @if ($errors->any())
-        <div style="background: #fdecea; color: #b71c1c; border: 1px solid #f5c6cb; padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; font-size: 13px;">
-            <ul style="margin: 0; padding-left: 18px;">
-                @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
-
-    <form action="{{ route('register.post') }}" method="POST">
-        @csrf
-
-        <div style="margin-bottom: 14px;">
-            <label for="name" style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px; color: #2b1e16;">
-                Nama Lengkap
-            </label>
-            <input id="name" type="text" name="name" value="{{ old('name') }}" required autofocus
-                   style="width: 100%; padding: 10px 12px; border: 1px solid #cbb9a5; border-radius: 8px; box-sizing: border-box;">
+        <div class="auth-top-brand">
+            <a href="{{ route('home') }}" class="bali-brand">Bali <span>Culinary</span></a>
         </div>
 
-        <div style="margin-bottom: 14px;">
-            <label for="email" style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px; color: #2b1e16;">
-                Email
-            </label>
-            <input id="email" type="email" name="email" value="{{ old('email') }}" required
-                   style="width: 100%; padding: 10px 12px; border: 1px solid #cbb9a5; border-radius: 8px; box-sizing: border-box;">
+        <div class="auth-card">
+            <h2 style="margin-bottom: 18px;">Buat Akun</h2>
+
+            @if ($errors->any())
+                <div class="alert-banner error">{{ $errors->first() }}</div>
+            @endif
+
+            <form action="{{ route('register.post') }}" method="POST">
+                @csrf
+
+                <div class="input-icon-wrap">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="8" r="4" />
+                        <path d="M20 21a8 8 0 1 0-16 0" />
+                    </svg>
+                    <input type="text" name="username" value="{{ old('username') }}" placeholder="Username">
+                </div>
+
+                <div class="input-icon-wrap">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    <input type="text" name="name" value="{{ old('name') }}" placeholder="Nama Lengkap" required>
+                </div>
+
+                <div class="input-icon-wrap">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="4" width="20" height="16" rx="2" />
+                        <path d="m22 7-10 6L2 7" />
+                    </svg>
+                    <input type="email" name="email" value="{{ old('email') }}" placeholder="Email" required>
+                </div>
+
+                <span class="auth-field-label">Buat Password</span>
+
+                <div class="input-icon-wrap">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    <input type="password" name="password" placeholder="Password (minimal 8 karakter)" required>
+                </div>
+
+                <div class="input-icon-wrap">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    <input type="password" name="password_confirmation" placeholder="Konfirmasi Password" required>
+                </div>
+
+                <label class="checkbox-row" style="margin: 10px 0 16px;">
+                    <input type="checkbox" name="terms" value="1" required>
+                    <span>Saya menyetujui syarat &amp; ketentuan Bali Culinary</span>
+                </label>
+
+                <button type="submit" class="btn-terracotta rect" style="width: 100%; height: 42px; margin-bottom: 10px;">Buat Akun</button>
+                <a href="{{ route('login') }}" class="btn-white" style="width: 100%; height: 42px;">Batal</a>
+            </form>
         </div>
+    </div>
 
-        <div style="margin-bottom: 14px;">
-            <label for="password" style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px; color: #2b1e16;">
-                Password
-            </label>
-            <input id="password" type="password" name="password" required
-                   style="width: 100%; padding: 10px 12px; border: 1px solid #cbb9a5; border-radius: 8px; box-sizing: border-box;">
-        </div>
+    <script src="{{ asset('Assets/js/animations.js') }}?v={{ filemtime(public_path('Assets/js/animations.js')) }}" defer></script>
+</body>
 
-        <div style="margin-bottom: 18px;">
-            <label for="password_confirmation" style="display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px; color: #2b1e16;">
-                Konfirmasi Password
-            </label>
-            <input id="password_confirmation" type="password" name="password_confirmation" required
-                   style="width: 100%; padding: 10px 12px; border: 1px solid #cbb9a5; border-radius: 8px; box-sizing: border-box;">
-        </div>
-
-        <button type="submit"
-                style="width: 100%; background: #a84325; color: #fff; border: none; padding: 11px 16px; border-radius: 999px; font-weight: 600; font-size: 14px; cursor: pointer;">
-            Daftar Sekarang
-        </button>
-    </form>
-
-    <p style="margin: 16px 0 0; text-align: center; font-size: 13px; color: #6e5d52;">
-        Sudah punya akun?
-        <a href="{{ route('login') }}" style="color: #a84325; font-weight: 600; text-decoration: none;">
-            Masuk di sini
-        </a>
-    </p>
-</div>
-@endsection
+</html>
