@@ -1,28 +1,22 @@
 @extends('layouts.app')
 
-@section('title', 'Resep Favorit — SayaMauMasak')
+@section('title', 'Resep Favorit — Bali Culinary')
 
 @section('content')
-    <header class="recipe-hero">
-        <div class="recipe-hero-inner">
-            <div class="recipe-hero-content">
-                <a href="{{ route('explore') }}" class="recipe-back-pill">&larr; Kembali ke Jelajah</a>
-                <h1>Resep <span class="accent">Tersimpan</span></h1>
-                <p>Kumpulan resep kuliner Bali yang kamu simpan untuk dicoba kembali kapan saja.</p>
+    <header class="bali-hero hero-explore">
+        <div class="bali-hero-inner">
+            <div class="bali-hero-content">
+                <h1>Resep <span class="accent">Favorit</span></h1>
+                <p>Daftar resep masakan tradisional Bali yang telah kamu simpan untuk dimasak kembali kapan saja.</p>
+                <div class="bali-hero-actions">
+                    <a href="{{ route('account') }}" class="pill-tag">&larr; Kembali ke Akun</a>
+                </div>
             </div>
         </div>
     </header>
 
-    <section class="section-block">
+    <section class="home-section">
         <div class="recipe-container">
-            <div class="section-header">
-                <div class="section-title-group">
-                    <span class="starburst-badge" aria-hidden="true">&#9829;</span>
-                    <h2 class="section-title">Favorit Saya</h2>
-                </div>
-                <a href="{{ route('explore') }}" class="btn-terracotta">Jelajahi Resep Lain &rarr;</a>
-            </div>
-
             <div class="recipe-grid cols-3" id="favorites-grid">
                 @foreach ($foods as $food)
                     @include('partials.recipe-card', ['food' => $food])
@@ -30,9 +24,9 @@
             </div>
 
             <div class="recipe-empty" id="favorites-empty" style="display: none;">
-                <h3>Belum ada resep favorit</h3>
-                <p>Klik ikon hati pada kartu resep atau tombol "Simpan Resep" di halaman detail untuk menyimpannya di sini.</p>
-                <a href="{{ route('explore') }}" class="btn-terracotta">Mulai Jelajahi Resep</a>
+                <h3 style="font-family: 'Playfair Display', serif; color: var(--terracotta); margin: 0 0 8px;">Belum ada resep favorit</h3>
+                <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px;">Klik ikon hati pada kartu resep atau tombol "Simpan Resep" di halaman detail untuk menyimpannya di sini.</p>
+                <a href="{{ route('explore') }}" class="btn-terracotta">Jelajahi Resep</a>
             </div>
         </div>
     </section>
@@ -67,7 +61,7 @@
             });
 
             try {
-                const raw = localStorage.getItem('sayamaumasak_favorites');
+                const raw = localStorage.getItem('baliculinary_favorites');
                 const parsed = raw ? JSON.parse(raw) : [];
                 filterFavorites(Array.isArray(parsed) ? parsed : []);
             } catch (e) {

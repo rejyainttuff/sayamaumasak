@@ -1,166 +1,159 @@
 @extends('layouts.app')
 
-@section('title', 'Mari Berbagi Resep Bali — SayaMauMasak')
+@section('title', 'Mari Berbagi Rasa Makanan Bali — Bali Culinary')
 
 @section('content')
-    <header class="recipe-hero">
-        <div class="recipe-hero-inner">
-            <div class="recipe-hero-content">
-                <a href="{{ route('recipe') }}" class="recipe-back-pill">&larr; Kembali</a>
-                <h1>Mari berbagi<br>Resep <span class="accent">Bali</span></h1>
-                <p>Bagikan resep kuliner tradisional Bali favoritmu agar lebih banyak orang dapat memasak dan melestarikannya.</p>
+    <header class="bali-hero hero-create">
+        <div class="bali-hero-inner">
+            <div class="bali-hero-content">
+                <h1>Mari berbagi rasa<br>makanan <span class="accent">Bali</span></h1>
+                <p>Bagikan resep masakan tradisional khas Bali favoritmu agar lebih banyak orang dapat memasak dan melestarikannya.</p>
+                <div class="bali-hero-actions">
+                    <a href="{{ route('explore') }}" class="pill-tag">&larr; Kembali</a>
+                </div>
             </div>
         </div>
     </header>
 
-    <section class="recipe-container">
-        @if ($errors->any())
-            <div class="alert-banner error">
-                <strong>Mohon lengkapi formulir:</strong>
-                <ul style="margin: 8px 0 0; padding-left: 18px;">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-
-        <form action="{{ route('recipe.store') }}" method="POST" enctype="multipart/form-data">
-            @csrf
-
-            <div class="form-top-actions">
-                <a href="{{ route('recipe') }}" class="btn-outline">Batal</a>
-                <button type="submit" class="btn-sage">Simpan Resep</button>
-            </div>
-
-            <div class="recipe-form-card">
-                <h2>Formulir Resep</h2>
-                <p class="recipe-form-subtitle">Lengkapi detail hidangan, bahan-bahan, dan langkah memasak dengan jelas.</p>
-
-                <div class="form-grid-2">
-                    <div class="form-group">
-                        <label for="name">Nama Resep / Hidangan</label>
-                        <input
-                            type="text"
-                            id="name"
-                            name="name"
-                            class="form-control"
-                            value="{{ old('name') }}"
-                            placeholder="Contoh: Lawar Nangka Muda Bali"
-                            required
-                        >
-                    </div>
-
-                    <div class="form-group">
-                        <label for="region">Asal Daerah</label>
-                        <select id="region" name="region" class="form-control" required>
-                            <option value="">Pilih Kabupaten / Kota di Bali</option>
-                            @foreach ($regions as $region)
-                                <option value="{{ $region }}" @selected(old('region') === $region)>{{ $region }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="difficulty">Tingkat Kesulitan</label>
-                        <select id="difficulty" name="difficulty" class="form-control" required>
-                            <option value="">Pilih tingkat kesulitan</option>
-                            @foreach ($difficulties as $difficulty)
-                                <option value="{{ $difficulty }}" @selected(old('difficulty') === $difficulty)>{{ $difficulty }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="category">Kategori</label>
-                        <select id="category" name="category" class="form-control" required>
-                            <option value="">Pilih kategori hidangan</option>
-                            @foreach ($categories as $category)
-                                <option value="{{ $category }}" @selected(old('category') === $category)>{{ $category }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="photo">Foto Resep</label>
-                        <label class="upload-dropzone" for="photo">
-                            <input type="file" id="photo" name="photo" accept="image/*">
-                            <strong id="upload-filename">Pilih atau seret gambar ke sini</strong>
-                            <span>Format JPG, PNG, atau WEBP (opsional)</span>
-                        </label>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="description">Deskripsi Singkat / Sejarah</label>
-                        <textarea
-                            id="description"
-                            name="description"
-                            class="form-control"
-                            placeholder="Ceritakan singkat keunikan rasa atau asal-usul hidangan ini..."
-                            required
-                        >{{ old('description') }}</textarea>
-                    </div>
+    <section class="share-wrap">
+        <div class="recipe-container">
+            @if ($errors->any())
+                <div class="alert-banner error">
+                    <strong>Mohon lengkapi formulir resep:</strong>
+                    <ul style="margin: 6px 0 0; padding-left: 18px;">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
                 </div>
+            @endif
 
-                <div class="form-group">
-                    <label for="cook_time">Waktu Memasak</label>
-                    <input
-                        type="text"
-                        id="cook_time"
-                        name="cook_time"
-                        class="form-control"
-                        value="{{ old('cook_time') }}"
-                        placeholder="Contoh: 45 menit"
-                        required
-                    >
-                </div>
-
-                <div class="form-grid-2">
-                    <div class="form-group">
-                        <label for="ingredients">Bahan-bahan (satu bahan per baris)</label>
-                        <textarea
-                            id="ingredients"
-                            name="ingredients"
-                            class="form-control"
-                            style="min-height: 165px;"
-                            placeholder="250 gram kacang panjang&#10;200 gram daging ayam cincang&#10;3 sdm bumbu base genep"
-                            required
-                        >{{ old('ingredients') }}</textarea>
+            <div class="share-layout">
+                <aside class="share-left-col">
+                    <div class="terms-card">
+                        <h2>Ketentuan Berbagi Resep</h2>
+                        <ol class="terms-list">
+                            <li>Pastikan resep merupakan kuliner khas Bali yang autentik dengan takaran bahan yang jelas.</li>
+                            <li>Sertakan langkah memasak yang runtut dan mudah dipahami agar siap ditinjau oleh admin Bali Culinary.</li>
+                        </ol>
                     </div>
 
-                    <div class="form-group">
-                        <label>Langkah-langkah Memasak</label>
-                        <div class="steps-builder" id="steps-builder">
-                            @php
-                                $oldSteps = old('steps', ['', '', '']);
-                                if (!is_array($oldSteps) || count($oldSteps) === 0) {
-                                    $oldSteps = ['', '', ''];
-                                }
-                            @endphp
-                            @foreach ($oldSteps as $index => $stepValue)
-                                <div class="step-row">
-                                    <span class="rank-circle step-number">{{ $index + 1 }}</span>
-                                    <input
-                                        type="text"
-                                        name="steps[]"
-                                        class="form-control"
-                                        value="{{ $stepValue }}"
-                                        placeholder="Tulis langkah memasak..."
-                                    >
-                                    <button type="button" class="step-remove-btn" aria-label="Hapus langkah">&times;</button>
+                    <img src="{{ asset('Assets/images/decor-temple.png') }}" alt="Ilustrasi Pura Bali" class="share-temple-art">
+                </aside>
+
+                <div class="share-form-card">
+                    <h2>Formulir Berbagi Resep</h2>
+
+                    <form action="{{ route('recipe.store') }}" method="POST" enctype="multipart/form-data">
+                        @csrf
+
+                        <div class="form-grid-2">
+                            <div class="form-group">
+                                <label for="name">Nama Resep</label>
+                                <input type="text" id="name" name="name" class="form-control" value="{{ old('name') }}" placeholder="Contoh: Lawar Nangka Bali" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="description">Deskripsi Singkat</label>
+                                <input type="text" id="description" name="description" class="form-control" value="{{ old('description') }}" placeholder="Ceritakan cita rasa atau keunikannya..." required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="region">Asal Daerah</label>
+                                <select id="region" name="region" class="form-control" required>
+                                    <option value="">Pilih Kabupaten / Kota</option>
+                                    @foreach ($regions as $region)
+                                        <option value="{{ $region }}" @selected(old('region') === $region)>{{ $region }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="servings">Porsi</label>
+                                <input type="text" id="servings" name="servings" class="form-control" value="{{ old('servings') }}" placeholder="Contoh: 4 porsi">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="category">Kategori</label>
+                                <select id="category" name="category" class="form-control" required>
+                                    <option value="">Pilih Kategori</option>
+                                    @foreach ($categories as $category)
+                                        <option value="{{ $category }}" @selected(old('category') === $category)>{{ $category }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="photo">Foto Masakan</label>
+                                <div class="photo-upload-row">
+                                    <label class="photo-upload-btn" for="photo">
+                                        <input type="file" id="photo" name="photo" accept="image/*">
+                                        Pilih Foto Masakan
+                                    </label>
+                                    <div class="photo-upload-preview" id="upload-filename">Belum ada file</div>
                                 </div>
-                            @endforeach
+                            </div>
+
+                            <div class="form-group">
+                                <label for="cook_time">Waktu Memasak</label>
+                                <input type="text" id="cook_time" name="cook_time" class="form-control" value="{{ old('cook_time') }}" placeholder="Contoh: 45 menit" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="video_url">Link Video (Opsional)</label>
+                                <input type="text" id="video_url" name="video_url" class="form-control" value="{{ old('video_url') }}" placeholder="https://youtube.com/...">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="ingredients">Bahan-Bahan (satu per baris)</label>
+                                <textarea id="ingredients" name="ingredients" class="form-control" placeholder="250 g kacang panjang&#10;200 g daging ayam cincang&#10;3 sdm bumbu base genep" required>{{ old('ingredients') }}</textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Langkah-Langkah Memasak</label>
+                                <div class="steps-builder" id="steps-builder">
+                                    @php
+                                        $oldSteps = old('steps', ['', '']);
+                                        if (!is_array($oldSteps) || count($oldSteps) === 0) {
+                                            $oldSteps = ['', ''];
+                                        }
+                                    @endphp
+                                    @foreach ($oldSteps as $index => $stepValue)
+                                        <div class="step-row">
+                                            <span class="rank-circle step-number">{{ $index + 1 }}</span>
+                                            <input type="text" name="steps[]" class="form-control" value="{{ $stepValue }}" placeholder="Tulis langkah memasak...">
+                                            <button type="button" class="step-remove-btn" aria-label="Hapus langkah">&times;</button>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                <div style="margin-top: 8px;">
+                                    <button type="button" id="add-step-btn" class="pill-tag">+ Tambah Langkah</button>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="difficulty">Tingkat Kesulitan</label>
+                                <select id="difficulty" name="difficulty" class="form-control" required>
+                                    <option value="">Pilih Tingkat Kesulitan</option>
+                                    @foreach ($difficulties as $difficulty)
+                                        <option value="{{ $difficulty }}" @selected(old('difficulty') === $difficulty)>{{ $difficulty }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
                         </div>
 
-                        <div style="margin-top: 12px;">
-                            <button type="button" id="add-step-btn" class="btn-terracotta rect" style="height: 38px; font-size: 13px;">
-                                + Tambah Langkah
-                            </button>
-                        </div>
-                    </div>
+                        <label class="checkbox-row">
+                            <input type="checkbox" required>
+                            <span>Saya menyatakan resep ini asli dan siap ditinjau oleh admin Bali Culinary.</span>
+                        </label>
+
+                        <button type="submit" class="btn-terracotta rect">Kirim Resep</button>
+                    </form>
                 </div>
             </div>
-        </form>
+        </div>
+
+        <img src="{{ asset('Assets/images/decor-hibiscus.png') }}" alt="" class="corner-hibiscus bottom-right" aria-hidden="true">
     </section>
 @endsection
 
@@ -212,7 +205,7 @@
                 fileInput.addEventListener('change', function () {
                     fileLabel.textContent = fileInput.files && fileInput.files[0]
                         ? fileInput.files[0].name
-                        : 'Pilih atau seret gambar ke sini';
+                        : 'Belum ada file';
                 });
             }
         })();
