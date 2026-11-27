@@ -6,12 +6,60 @@ use App\Models\Food;
 use App\Models\Ingredient;
 use App\Models\Recipe;
 use App\Models\RecipeStep;
+use App\Services\ContributorLevelService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class RecipeController extends Controller
 {
+    public function __construct(
+        private readonly ContributorLevelService $levelService
+    ) {}
+
+    public function show(Recipe $recipe)
+    {
+        $recipe->load([
+            'food.category',
+            'user',
+            'recipeIngredients.ingredient',
+            'recipeSteps' => fn ($q) => $q->orderBy('step_number'),
+        ]);
+
+        $user = auth()->user();
+        if (! $recipe->isApproved() && (! $user || (! $user->isAdmin() && $user->id !== $recipe->user_id))) {
+            abort(404);
+        }
+
+        return view('recipes.show', compact('recipe'));
+    }
+
+    public function approvals(Request $request)
+    {
+        $statusFilter = trim((string) $request->query('status', 'pending'));
+
+        $query = Recipe::with([
+            'food.category',
+            'user',
+            'recipeIngredients.ingredient',
+            'recipeSteps' => fn ($q) => $q->orderBy('step_number'),
+        ])->latest();
+
+        if (in_array($statusFilter, ['pending', 'approved', 'rejected'], true)) {
+            $query->where('approval_status', $statusFilter);
+        }
+
+        $recipes = $query->paginate(10)->withQueryString();
+        $counts = [
+            'all' => Recipe::count(),
+            'pending' => Recipe::where('approval_status', 'pending')->count(),
+            'approved' => Recipe::where('approval_status', 'approved')->count(),
+            'rejected' => Recipe::where('approval_status', 'rejected')->count(),
+        ];
+
+        return view('admin.recipe-approvals', compact('recipes', 'statusFilter', 'counts'));
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -136,6 +184,8 @@ class RecipeController extends Controller
         if ($user && $user->isAdmin()) {
             $rules['approval_status'] = ['nullable', 'in:pending,approved,rejected'];
         }
+        $rules['video_url'] = ['nullable', 'string', 'max:500'];
+        $rules['food_thumbnail'] = ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'];
 
         $validated = $request->validate($rules);
 
@@ -146,20 +196,40 @@ class RecipeController extends Controller
             'cook_time_minutes' => $validated['cook_time_minutes'],
             'servings' => $validated['servings'],
             'difficulty' => $validated['difficulty'],
+            'video_url' => array_key_exists('video_url', $validated) ? $validated['video_url'] : $recipe->video_url,
         ];
 
-        if ($user && $user->isHelper()) {
+        if ($user && $user->isHelper() && ! $user->isAdmin()) {
             $recipeData['approval_status'] = 'pending';
-        } elseif ($user && $user->isAdmin() && !empty($validated['approval_status'])) {
+        } elseif ($user && $user->isAdmin() && ! empty($validated['approval_status'])) {
             $recipeData['approval_status'] = $validated['approval_status'];
         }
 
-        DB::transaction(function () use ($request, $recipe, $recipeData, $validated) {
+        DB::transaction(function () use ($request, $recipe, $recipeData, $validated): void {
             $recipe->update($recipeData);
 
-            $this->syncIngredients($recipe, $validated['ingredients'] ?? []);
-            $this->syncSteps($request, $recipe, $validated['steps'] ?? []);
+            if ($request->hasFile('food_thumbnail') && $recipe->food) {
+                $path = $request->file('food_thumbnail')->store('foods', 'public');
+                $recipe->food->update(['thumbnail' => '/storage/'.$path]);
+            }
+
+            if ($request->has('ingredients')) {
+                $this->syncIngredients($recipe, $validated['ingredients'] ?? []);
+            }
+
+            if ($request->has('steps')) {
+                $this->syncSteps($request, $recipe, $validated['steps'] ?? []);
+            }
         });
+
+        $recipe->refresh();
+        if ($recipe->isApproved()) {
+            $this->levelService->grantRecipeApprovalBonus($recipe);
+        }
+
+        if ($user && $user->isAdmin()) {
+            return redirect()->route('admin.recipes.approvals')->with('success', 'Resep berhasil diperbarui.');
+        }
 
         return redirect()->route('recipes.index')->with('success', 'Resep berhasil diperbarui.');
     }
@@ -167,8 +237,13 @@ class RecipeController extends Controller
     public function approve(Recipe $recipe)
     {
         $recipe->update(['approval_status' => 'approved']);
+        $bonusGranted = $this->levelService->grantRecipeApprovalBonus($recipe);
 
-        return back()->with('success', 'Resep berhasil disetujui.');
+        $message = $bonusGranted
+            ? 'Resep berhasil disetujui dan Contributor mendapatkan bonus +5 level.'
+            : 'Resep berhasil disetujui.';
+
+        return back()->with('success', $message);
     }
 
     public function reject(Recipe $recipe)
@@ -186,11 +261,11 @@ class RecipeController extends Controller
             $ingredientId = $item['ingredient_id'] ?? null;
             $ingredientName = isset($item['ingredient_name']) ? trim($item['ingredient_name']) : null;
 
-            if (!$ingredientId && !$ingredientName) {
+            if (! $ingredientId && ! $ingredientName) {
                 continue;
             }
 
-            if (!$ingredientId && $ingredientName) {
+            if (! $ingredientId && $ingredientName) {
                 $ingredient = Ingredient::firstOrCreate(['name' => $ingredientName]);
                 $ingredientId = $ingredient->id;
             }
@@ -215,7 +290,7 @@ class RecipeController extends Controller
                 continue;
             }
 
-            $stepNumber = !empty($stepData['step_number'])
+            $stepNumber = ! empty($stepData['step_number'])
                 ? (int) $stepData['step_number']
                 : ($index + 1);
 
@@ -252,7 +327,7 @@ class RecipeController extends Controller
         }
 
         foreach ($existingSteps as $id => $step) {
-            if (!in_array($id, $keptStepIds, true)) {
+            if (! in_array($id, $keptStepIds, true)) {
                 if ($step->image && Storage::disk('public')->exists($step->image)) {
                     Storage::disk('public')->delete($step->image);
                 }

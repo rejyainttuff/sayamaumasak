@@ -3,12 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\ContributorRequest;
 use App\Models\CulinaryStory;
 use App\Models\Food;
 use App\Models\Recipe;
 use App\Models\Review;
+use App\Models\SiteVisit;
 use App\Models\User;
+use App\Services\ContributorLevelService;
+use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,8 +28,32 @@ class PageController extends Controller
     {
         $foods = $this->getAllCulinaryData();
         $popularFoods = array_values(array_filter($foods, fn (array $food): bool => $food['is_popular']));
+        $stories = [];
 
-        return view('home', compact('foods', 'popularFoods'));
+        if ($this->hasDatabaseTable('culinary_stories')) {
+            try {
+                $storyQuery = CulinaryStory::with(['food', 'user'])->latest();
+                if (Schema::hasColumn('culinary_stories', 'approval_status')) {
+                    $storyQuery->where('approval_status', 'approved');
+                }
+                foreach ($storyQuery->take(3)->get() as $item) {
+                    $plain = trim(strip_tags((string) $item->content));
+                    $stories[] = [
+                        'id' => $item->id,
+                        'slug' => $item->slug,
+                        'title' => (string) ($item->title ?: ($item->food?->name ?? 'Kisah Kuliner Bali')),
+                        'region' => (string) ($item->food?->origin_area ?: 'Bali'),
+                        'author' => $item->user?->name ?? 'Tim Bali Culinary',
+                        'thumbnail' => $item->thumbnail ?: ($item->food?->thumbnail ?? 'Assets/images/banner-beranda.png'),
+                        'excerpt' => strlen($plain) > 160 ? substr($plain, 0, 157).'...' : $plain,
+                    ];
+                }
+            } catch (Throwable) {
+                $stories = [];
+            }
+        }
+
+        return view('home', compact('foods', 'popularFoods', 'stories'));
     }
 
     public function explore(Request $request): View
@@ -54,16 +83,16 @@ class PageController extends Controller
             ->when($selectedDifficulty !== '', fn ($collection) => $collection->where('difficulty', $selectedDifficulty));
 
         $filtered = match ($sort) {
-            'name_asc'   => $filtered->sortBy(fn (array $food) => mb_strtolower($food['name'])),
-            'name_desc'  => $filtered->sortByDesc(fn (array $food) => mb_strtolower($food['name'])),
+            'name_asc' => $filtered->sortBy(fn (array $food) => mb_strtolower($food['name'])),
+            'name_desc' => $filtered->sortByDesc(fn (array $food) => mb_strtolower($food['name'])),
             'region_asc' => $filtered->sortBy(fn (array $food) => mb_strtolower($food['region'] ?? '')),
-            'popular'    => $filtered->sortByDesc(fn (array $food) => !empty($food['is_popular']) ? 1 : 0),
-            default      => $filtered,
+            'popular' => $filtered->sortByDesc(fn (array $food) => ! empty($food['is_popular']) ? 1 : 0),
+            default => $filtered,
         };
 
         $filtered = $filtered->values();
 
-        $perPage = 8;
+        $perPage = 10;
         $totalPages = max(1, (int) ceil($filtered->count() / $perPage));
         $currentPage = min(max(1, (int) $request->query('page', 1)), $totalPages);
         $foods = $filtered->slice(($currentPage - 1) * $perPage, $perPage)->values()->all();
@@ -119,6 +148,17 @@ class PageController extends Controller
                     $averageRating = round((float) $reviews->avg('rating'), 1);
                 }
             }
+        }
+
+        if (Auth::check() && $food) {
+            $recentKey = 'recently_viewed_user_'.Auth::id();
+            $recentSlugs = session()->get($recentKey, []);
+            $recentSlugs = array_values(array_filter(
+                is_array($recentSlugs) ? $recentSlugs : [],
+                fn (string $itemSlug): bool => $itemSlug !== $food['slug']
+            ));
+            array_unshift($recentSlugs, $food['slug']);
+            session()->put($recentKey, array_slice($recentSlugs, 0, 8));
         }
 
         return view('food-detail', compact('food', 'foods', 'relatedFoods', 'isFavorited', 'reviews', 'averageRating', 'reviewsCount'));
@@ -271,37 +311,134 @@ class PageController extends Controller
 
     public function mySubmissions(Request $request): View
     {
-        $userId = $request->user()->id;
+        $user = $request->user();
+        $userId = $user->id;
+        $isContributor = $user->isContributor() || $user->isAdmin();
 
-        $foodSubmissions = Food::with('category')
-            ->where('user_id', $userId)
-            ->latest()
-            ->get();
+        $contributorRequest = Schema::hasTable('contributor_requests')
+            ? $user->contributorRequests()->latest()->first()
+            : null;
 
-        $recipeSubmissions = Recipe::with('food')
-            ->where('user_id', $userId)
-            ->latest()
-            ->get();
+        $foodSubmissions = collect();
+        $recipeSubmissions = collect();
+        $storySubmissions = collect();
 
-        $storySubmissions = CulinaryStory::with('food')
-            ->where('user_id', $userId)
-            ->latest()
-            ->get();
+        if ($isContributor || $contributorRequest !== null) {
+            $foodSubmissions = Schema::hasTable('foods')
+                ? Food::with('category')->where('user_id', $userId)->latest()->get()
+                : collect();
+
+            $recipeSubmissions = Schema::hasTable('recipes')
+                ? Recipe::with('food')->where('user_id', $userId)->latest()->get()
+                : collect();
+
+            $storySubmissions = Schema::hasTable('culinary_stories')
+                ? CulinaryStory::with('food')->where('user_id', $userId)->latest()->get()
+                : collect();
+        }
+
+        $levelProgress = app(ContributorLevelService::class)->getProgressSummary($user);
 
         return view('submissions', compact(
+            'isContributor',
+            'contributorRequest',
+            'levelProgress',
             'foodSubmissions',
             'recipeSubmissions',
             'storySubmissions'
         ));
     }
 
-    public function stories(): View
+    public function recordReadingHeartbeat(Request $request, ContributorLevelService $levelService): JsonResponse
+    {
+        $validated = $request->validate([
+            'content_type' => ['required', 'in:food,recipe,story'],
+            'content_id' => ['required', 'integer', 'min:1'],
+            'session_token' => ['required', 'string', 'min:8', 'max:64'],
+            'delta_seconds' => ['required', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $result = $levelService->recordReadingHeartbeat(
+            $request->user(),
+            $validated['content_type'],
+            (int) $validated['content_id'],
+            $validated['session_token'],
+            (int) $validated['delta_seconds']
+        );
+
+        return response()->json($result);
+    }
+
+    public function showContributorForm(Request $request): View
+    {
+        $user = $request->user();
+        $latestRequest = Schema::hasTable('contributor_requests')
+            ? $user->contributorRequests()->latest()->first()
+            : null;
+
+        return view('contributor-apply', compact('user', 'latestRequest'));
+    }
+
+    public function submitContributorApplication(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        if ($user->isContributor() || $user->isAdmin()) {
+            return redirect()->route('submissions.index')
+                ->with('success', 'Akunmu sudah memiliki akses Contributor.');
+        }
+
+        $validated = $request->validate([
+            'specialty' => ['nullable', 'string', 'max:120'],
+            'reason' => ['required', 'string', 'min:200', 'max:2000'],
+        ], [
+            'reason.min' => 'Alasan pengajuan wajib diisi minimal 200 karakter.',
+        ]);
+
+        if (Schema::hasTable('contributor_requests')) {
+            $hasPending = $user->contributorRequests()->where('status', 'pending')->exists();
+            if ($hasPending) {
+                return back()->with('success', 'Pengajuan Contributor kamu sedang menunggu persetujuan admin.');
+            }
+
+            ContributorRequest::create([
+                'user_id' => $user->id,
+                'specialty' => $validated['specialty'] ?? null,
+                'reason' => $validated['reason'],
+                'status' => 'pending',
+            ]);
+        }
+
+        return redirect()->route('submissions.index')
+            ->with('success', 'Pengajuan menjadi Contributor berhasil dikirim dan menunggu persetujuan admin.');
+    }
+
+    public function updateContributorRequestStatus(Request $request, ContributorRequest $contributorRequest): RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'in:approved,rejected,pending'],
+        ]);
+
+        $contributorRequest->update(['status' => $validated['status']]);
+
+        if ($validated['status'] === 'approved' && $contributorRequest->user) {
+            if (! $contributorRequest->user->isAdmin()) {
+                $contributorRequest->user->update(['role' => 'contributor']);
+            }
+        }
+
+        $label = $validated['status'] === 'approved' ? 'disetujui' : ($validated['status'] === 'rejected' ? 'ditolak' : 'pending');
+
+        return back()->with('success', 'Pengajuan Contributor berhasil '.$label.'.');
+    }
+
+    public function stories(Request $request): View
     {
         $stories = [];
 
         if ($this->hasDatabaseTable('culinary_stories')) {
             try {
-                $storyQuery = CulinaryStory::with('food')->latest();
+                $storyQuery = CulinaryStory::with(['food', 'user'])->latest();
 
                 if (Schema::hasColumn('culinary_stories', 'approval_status')) {
                     $storyQuery->where('approval_status', 'approved');
@@ -313,10 +450,16 @@ class PageController extends Controller
 
                 foreach ($dbStories as $item) {
                     $plain = trim(strip_tags((string) $item->content));
+                    $wordCount = max(1, str_word_count($plain));
+                    $readMinutes = max(1, (int) ceil($wordCount / 180));
                     $stories[] = [
+                        'id' => $item->id,
+                        'slug' => $item->slug,
                         'title' => (string) ($item->title ?: ($item->food?->name ?? 'Kisah Kuliner Bali')),
                         'region' => (string) ($item->food?->origin_area ?: 'Bali'),
-                        'read_time' => '4 menit baca',
+                        'author' => $item->user?->name ?? 'Tim Bali Culinary',
+                        'thumbnail' => $item->thumbnail ?: ($item->food?->thumbnail ?? 'Assets/images/banner-beranda.png'),
+                        'read_time' => $readMinutes.' menit baca',
                         'excerpt' => strlen($plain) > 180 ? substr($plain, 0, 177).'...' : $plain,
                     ];
                 }
@@ -328,33 +471,58 @@ class PageController extends Controller
         if ($stories === []) {
             $stories = [
                 [
+                    'id' => null,
+                    'slug' => null,
                     'title' => 'Filosofi Base Genep dalam Dapur Tradisional Bali',
                     'region' => 'Denpasar',
+                    'author' => 'Tim Bali Culinary',
+                    'thumbnail' => 'Assets/images/banner-beranda.png',
                     'read_time' => '4 menit baca',
                     'excerpt' => 'Base genep bukan sekadar racikan bumbu, melainkan harmoni rasa yang diwariskan turun-temurun untuk upacara adat hingga santapan keluarga.',
                 ],
                 [
+                    'id' => null,
+                    'slug' => null,
                     'title' => 'Tradisi Megibung di Karangasem: Makan Bersama Tanpa Sekat',
                     'region' => 'Karangasem',
+                    'author' => 'Tim Bali Culinary',
+                    'thumbnail' => 'Assets/images/banner-home.png',
                     'read_time' => '5 menit baca',
                     'excerpt' => 'Duduk melingkar menyantap nasi dan lauk khas Bali dalam satu dulang mengajarkan kebersamaan dan rasa syukur masyarakat Bali.',
                 ],
                 [
+                    'id' => null,
+                    'slug' => null,
                     'title' => 'Rahasia Aroma Asap Ayam Betutu Gilimanuk',
                     'region' => 'Jembrana',
+                    'author' => 'Tim Bali Culinary',
+                    'thumbnail' => 'Assets/images/banner-resep.png',
                     'read_time' => '3 menit baca',
                     'excerpt' => 'Proses memasak perlahan dalam balutan daun pisang dan bara sekam menghasilkan daging ayam empuk beraroma rempah yang memikat.',
                 ],
                 [
+                    'id' => null,
+                    'slug' => null,
                     'title' => 'Jaje Laklak: Manisnya Jajanan Pasar Pagi di Bali',
                     'region' => 'Klungkung',
+                    'author' => 'Tim Bali Culinary',
+                    'thumbnail' => 'Assets/images/banner-pengisian.png',
                     'read_time' => '3 menit baca',
                     'excerpt' => 'Dipanggang di atas cetakan tanah liat dengan aroma daun pandan, jaje laklak selalu menemani secangkir kopi Bali di pagi hari.',
                 ],
             ];
         }
 
-        return view('stories', compact('stories'));
+        $perPage = 10;
+        $totalPages = max(1, (int) ceil(count($stories) / $perPage));
+        $currentPage = min(max(1, (int) $request->query('page', 1)), $totalPages);
+        $paginatedStories = array_slice($stories, ($currentPage - 1) * $perPage, $perPage);
+
+        return view('stories', [
+            'stories' => $paginatedStories,
+            'currentPage' => $currentPage,
+            'totalPages' => $totalPages,
+        ]);
     }
 
     public function about(): View
@@ -394,39 +562,90 @@ class PageController extends Controller
         $foods = $this->getAllCulinaryData();
         $user = Auth::user();
         $profile = [
-            'name' => $user?->name ?? 'Acakadut',
-            'handle' => $user ? '@'.strtolower((string) preg_replace('/[^a-zA-Z0-9]+/', '_', $user->name)) : '@bali_culinary',
-            'email' => $user?->email ?? 'acakadut@baliculinary.id',
-            'role' => $user?->role ?? 'user',
+            'name' => $user->name,
+            'handle' => '@'.strtolower((string) preg_replace('/[^a-zA-Z0-9]+/', '_', $user->name)),
+            'email' => $user->email,
+            'role' => $user->role,
+            'bio' => $user->bio,
+            'avatar' => $user->avatar,
         ];
 
-        $favoriteSamples = array_slice($foods, 0, 2);
-        $recentSamples = array_slice($foods, 2, 2);
-        $reviews = [
-            [
-                'dish' => 'Lawar Bali',
-                'slug' => 'lawar-bali',
-                'rating' => 5,
-                'comment' => 'Bumbu base genepnya terasa segar sekali, petunjuk langkahnya sangat mudah diikuti di rumah!',
-                'date' => '2 hari lalu',
-            ],
-            [
-                'dish' => 'Sate Lilit Ikan',
-                'slug' => 'sate-lilit-ikan',
-                'rating' => 5,
-                'comment' => 'Aroma serai dan kelapa parutnya mantap, cocok disajikan dengan sambal matah.',
-                'date' => '5 hari lalu',
-            ],
-            [
-                'dish' => 'Ayam Betutu',
-                'slug' => 'ayam-betutu-gilimanuk',
-                'rating' => 4,
-                'comment' => 'Dagingnya empuk sampai ke tulang, resep keluarga terbaik!',
-                'date' => '1 minggu lalu',
-            ],
+        $favoriteSamples = [];
+        if ($this->hasDatabaseTable('foods') && $this->hasDatabaseTable('food_user')) {
+            $favoriteSamples = $user->favoriteFoods()
+                ->latest('food_user.created_at')
+                ->take(4)
+                ->get()
+                ->map(fn (Food $food): array => [
+                    'name' => $food->name,
+                    'slug' => $food->slug,
+                    'image' => $food->thumbnail ?: 'Assets/images/lawar.jpg',
+                ])
+                ->all();
+        }
+
+        $recentSlugs = session()->get('recently_viewed_user_'.$user->id, []);
+        $foodsBySlug = collect($foods)->keyBy('slug');
+        $recentSamples = collect(is_array($recentSlugs) ? $recentSlugs : [])
+            ->map(fn (string $slug) => $foodsBySlug->get($slug))
+            ->filter()
+            ->take(4)
+            ->values()
+            ->all();
+
+        $reviews = [];
+        if ($this->hasDatabaseTable('reviews') && $this->hasDatabaseTable('foods')) {
+            $reviews = $user->reviews()
+                ->with('food')
+                ->latest()
+                ->get()
+                ->map(fn (Review $review): array => [
+                    'dish' => $review->food?->name ?? 'Kuliner Bali',
+                    'slug' => $review->food?->slug ?? '',
+                    'rating' => (int) $review->rating,
+                    'comment' => (string) ($review->comment ?? ''),
+                    'date' => $review->created_at ? $review->created_at->diffForHumans() : '-',
+                ])
+                ->all();
+        }
+
+        $contributorRequest = Schema::hasTable('contributor_requests')
+            ? $user->contributorRequests()->latest()->first()
+            : null;
+
+        return view('account', compact('profile', 'foods', 'favoriteSamples', 'recentSamples', 'reviews', 'contributorRequest'));
+    }
+
+    public function editProfile(): View
+    {
+        $user = Auth::user();
+
+        return view('account-edit', compact('user'));
+    }
+
+    public function updateProfile(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'bio' => ['nullable', 'string', 'max:500'],
+            'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        $data = [
+            'name' => $validated['name'],
+            'bio' => $validated['bio'] ?? null,
         ];
 
-        return view('account', compact('profile', 'foods', 'favoriteSamples', 'recentSamples', 'reviews'));
+        if ($request->hasFile('avatar')) {
+            $path = $request->file('avatar')->store('avatars', 'public');
+            $data['avatar'] = '/storage/'.$path;
+        }
+
+        $user->update($data);
+
+        return redirect()->route('account')->with('success', 'Profil berhasil diperbarui!');
     }
 
     public function adminDashboard(Request $request): View
@@ -460,73 +679,457 @@ class PageController extends Controller
 
         foreach ($pendingRecipes as $recipe) {
             $pendingSubmissions->push([
-                'id'     => $recipe->id,
-                'type'   => 'recipe',
-                'label'  => 'Resep',
-                'slug'   => $recipe->slug ?? $recipe->food?->slug ?? '',
-                'name'   => $recipe->title ?? $recipe->name ?? 'Resep Tanpa Judul',
-                'author' => 'Diajukan oleh ' . ($recipe->user?->name ?? 'Contributor'),
+                'id' => $recipe->id,
+                'type' => 'recipe',
+                'label' => 'Resep',
+                'slug' => $recipe->slug ?? $recipe->food?->slug ?? '',
+                'name' => $recipe->title ?? $recipe->name ?? 'Resep Tanpa Judul',
+                'author' => 'Diajukan oleh '.($recipe->user?->name ?? 'Contributor'),
                 'status' => $recipe->approval_status ?? 'pending',
-                'model'  => $recipe,
+                'model' => $recipe,
             ]);
         }
 
         foreach ($pendingFoods as $food) {
             $pendingSubmissions->push([
-                'id'     => $food->id,
-                'type'   => 'food',
-                'label'  => 'Makanan',
-                'slug'   => $food->slug ?? '',
-                'name'   => $food->name ?? 'Kuliner Tanpa Nama',
-                'author' => 'Diajukan oleh ' . ($food->user?->name ?? 'Contributor'),
+                'id' => $food->id,
+                'type' => 'food',
+                'label' => 'Makanan',
+                'slug' => $food->slug ?? '',
+                'name' => $food->name ?? 'Kuliner Tanpa Nama',
+                'author' => 'Diajukan oleh '.($food->user?->name ?? 'Contributor'),
                 'status' => $food->approval_status ?? 'pending',
-                'model'  => $food,
+                'model' => $food,
             ]);
         }
 
         foreach ($pendingStories as $story) {
             $pendingSubmissions->push([
-                'id'     => $story->id,
-                'type'   => 'story',
-                'label'  => 'Cerita Kuliner',
-                'slug'   => $story->food?->slug ?? '',
-                'name'   => $story->title ?? ($story->food?->name ?? 'Cerita Kuliner'),
-                'author' => 'Diajukan oleh ' . ($story->user?->name ?? 'Contributor'),
+                'id' => $story->id,
+                'type' => 'story',
+                'label' => 'Cerita Kuliner',
+                'slug' => $story->food?->slug ?? '',
+                'name' => $story->title ?? ($story->food?->name ?? 'Cerita Kuliner'),
+                'author' => 'Diajukan oleh '.($story->user?->name ?? 'Contributor'),
                 'status' => $story->approval_status ?? 'pending',
-                'model'  => $story,
+                'model' => $story,
             ]);
         }
 
-        $recentMenu = Recipe::with('user')
+        $recentMenu = Recipe::with(['user', 'food'])
+            ->where('approval_status', 'approved')
             ->latest()
             ->take(5)
             ->get()
             ->map(function ($recipe) {
                 return [
-                    'slug'   => $recipe->slug ?? '',
-                    'name'   => $recipe->title ?? $recipe->name ?? 'Resep',
-                    'author' => 'oleh ' . ($recipe->user?->name ?? 'Contributor'),
-                    'status' => $recipe->approval_status ?? 'pending',
-                    'time'   => $recipe->created_at ? $recipe->created_at->diffForHumans() : '-',
+                    'id' => $recipe->id,
+                    'slug' => $recipe->food?->slug ?? '',
+                    'name' => $recipe->title ?? 'Resep',
+                    'author' => $recipe->user?->name ?? 'Admin Bali Culinary',
+                    'image' => $recipe->food?->thumbnail,
+                    'status' => $recipe->approval_status ?? 'approved',
+                    'published_at' => $recipe->created_at ? $recipe->created_at->format('d M Y') : '-',
+                    'time' => $recipe->created_at ? $recipe->created_at->diffForHumans() : '-',
                 ];
             });
 
+        $range = in_array($request->query('range'), ['7d', '30d', '12m'], true)
+            ? (string) $request->query('range')
+            : '7d';
+
         $stats = [
-            'foods'    => Schema::hasTable('foods') ? Food::count() : count($foods),
-            'recipes'  => Schema::hasTable('recipes') ? Recipe::count() : 0,
-            'pending'  => $pendingSubmissions->count(),
-            'reviews'  => Schema::hasTable('reviews') ? Review::count() : 0,
+            'foods' => Schema::hasTable('foods') ? Food::count() : 0,
+            'recipes' => Schema::hasTable('recipes') ? Recipe::count() : 0,
+            'contributors' => Schema::hasTable('users') ? User::whereIn('role', ['contributor', 'helper'])->count() : 0,
+            'users' => Schema::hasTable('users') ? User::count() : 0,
+            'reviews' => Schema::hasTable('reviews') ? Review::count() : 0,
+            'pending' => $pendingSubmissions->count(),
         ];
 
-        return view('admin.dashboard', compact('stats', 'recentMenu', 'pendingSubmissions', 'foods'));
+        $statCards = [
+            'foods' => $this->buildMetricCard(
+                'Total Makanan',
+                $stats['foods'],
+                Schema::hasTable('foods') ? Food::where('created_at', '>=', now()->subDays(30))->count() : 0,
+                Schema::hasTable('foods') ? Food::whereBetween('created_at', [now()->subDays(60), now()->subDays(30)])->count() : 0,
+                true
+            ),
+            'recipes' => $this->buildMetricCard(
+                'Total Resep',
+                $stats['recipes'],
+                Schema::hasTable('recipes') ? Recipe::where('created_at', '>=', now()->subDays(30))->count() : 0,
+                Schema::hasTable('recipes') ? Recipe::whereBetween('created_at', [now()->subDays(60), now()->subDays(30)])->count() : 0,
+                true
+            ),
+            'contributors' => $this->buildMetricCard(
+                'Total Kontributor',
+                $stats['contributors'],
+                Schema::hasTable('users') ? User::whereIn('role', ['contributor', 'helper'])->where('created_at', '>=', now()->subDays(30))->count() : 0,
+                Schema::hasTable('users') ? User::whereIn('role', ['contributor', 'helper'])->whereBetween('created_at', [now()->subDays(60), now()->subDays(30)])->count() : 0,
+                true
+            ),
+            'reviews' => $this->buildMetricCard(
+                'Total Ulasan',
+                $stats['reviews'],
+                Schema::hasTable('reviews') ? Review::where('created_at', '>=', now()->subDays(30))->count() : 0,
+                Schema::hasTable('reviews') ? Review::whereBetween('created_at', [now()->subDays(60), now()->subDays(30)])->count() : 0,
+                false
+            ),
+        ];
+
+        $visitorChart = $this->buildVisitorChart($range);
+        $contentSeries = $this->buildContentSeries($range, $visitorChart);
+
+        $contentDistribution = [
+            'labels' => ['Resep', 'Makanan', 'Cerita', 'Video'],
+            'data' => [
+                Schema::hasTable('recipes') ? Recipe::count() : 0,
+                Schema::hasTable('foods') ? Food::count() : 0,
+                Schema::hasTable('culinary_stories') ? CulinaryStory::count() : 0,
+                Schema::hasTable('recipes') && Schema::hasColumn('recipes', 'video_url')
+                    ? Recipe::whereNotNull('video_url')->where('video_url', '!=', '')->count()
+                    : 0,
+            ],
+        ];
+
+        $pendingSummary = [
+            'recipes' => $pendingRecipes->count(),
+            'foods' => $pendingFoods->count(),
+            'stories' => $pendingStories->count(),
+            'total' => $pendingSubmissions->count(),
+        ];
+
+        $pendingContributorRequests = Schema::hasTable('contributor_requests')
+            ? ContributorRequest::with('user')->where('status', 'pending')->latest()->get()
+            : collect();
+
+        $latestContributorRequest = $pendingContributorRequests->first();
+        $recentActivities = $this->buildRecentActivities();
+
+        return view('admin.dashboard', compact(
+            'stats',
+            'statCards',
+            'recentMenu',
+            'pendingSubmissions',
+            'pendingSummary',
+            'pendingContributorRequests',
+            'latestContributorRequest',
+            'recentActivities',
+            'foods',
+            'visitorChart',
+            'contentSeries',
+            'contentDistribution'
+        ));
+    }
+
+    public function adminContributorRequests(Request $request): View
+    {
+        $statusFilter = trim((string) $request->query('status', 'all'));
+
+        $query = ContributorRequest::with('user')->latest();
+        if (in_array($statusFilter, ['pending', 'approved', 'rejected'], true)) {
+            $query->where('status', $statusFilter);
+        }
+
+        $requests = $query->paginate(10)->withQueryString();
+        $counts = [
+            'all' => ContributorRequest::count(),
+            'pending' => ContributorRequest::where('status', 'pending')->count(),
+            'approved' => ContributorRequest::where('status', 'approved')->count(),
+            'rejected' => ContributorRequest::where('status', 'rejected')->count(),
+        ];
+
+        return view('admin.contributors', compact('requests', 'statusFilter', 'counts'));
+    }
+
+    public function adminUsers(Request $request): View
+    {
+        $search = trim((string) $request->query('search', ''));
+        $roleFilter = trim((string) $request->query('role', ''));
+
+        $users = User::withCount(['recipes', 'foods', 'reviews'])
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($sub) use ($search): void {
+                    $sub->where('name', 'like', "%{$search}%")
+                        ->orWhere('username', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            })
+            ->when($roleFilter !== '', fn ($query) => $query->where('role', $roleFilter))
+            ->latest()
+            ->paginate(12)
+            ->withQueryString();
+
+        $analyticsSummary = [
+            'total_users' => User::count(),
+            'admins' => User::where('role', 'admin')->count(),
+            'contributors' => User::whereIn('role', ['contributor', 'helper'])->count(),
+            'regular_users' => User::where('role', 'user')->count(),
+            'total_visits' => Schema::hasTable('site_visits') ? SiteVisit::count() : 0,
+            'total_recipes' => Schema::hasTable('recipes') ? Recipe::count() : 0,
+            'total_reviews' => Schema::hasTable('reviews') ? Review::count() : 0,
+        ];
+
+        return view('admin.users', compact('users', 'search', 'roleFilter', 'analyticsSummary'));
+    }
+
+    public function updateUserRole(Request $request, User $user): RedirectResponse
+    {
+        $validated = $request->validate([
+            'role' => ['required', 'in:admin,contributor,helper,user'],
+        ]);
+
+        if ($user->id === $request->user()->id && $validated['role'] !== 'admin') {
+            return back()->with('error', 'Tidak dapat menurunkan role akun Admin milik sendiri.');
+        }
+
+        $user->update(['role' => $validated['role']]);
+
+        return back()->with('success', 'Role pengguna '.$user->name.' berhasil diperbarui menjadi '.ucfirst($validated['role']).'.');
+    }
+
+    /**
+     * Build a metric card payload with real percentage change vs previous 30-day window.
+     *
+     * @return array{label: string, total: int, current_period: int, previous_period: int, percent: float|null, trend: string, tone: string, caption: string}
+     */
+    private function buildMetricCard(string $label, int $total, int $currentPeriod, int $previousPeriod, bool $higherIsPositive): array
+    {
+        if ($previousPeriod <= 0) {
+            return [
+                'label' => $label,
+                'total' => $total,
+                'current_period' => $currentPeriod,
+                'previous_period' => $previousPeriod,
+                'percent' => null,
+                'trend' => 'neutral',
+                'tone' => 'neutral',
+                'caption' => 'Belum ada data pembanding',
+            ];
+        }
+
+        $diff = $currentPeriod - $previousPeriod;
+        $percent = round(($diff / $previousPeriod) * 100, 1);
+
+        if ($diff > 0) {
+            $trend = 'up';
+            $tone = $higherIsPositive ? 'positive' : 'caution';
+            $caption = 'Naik '.abs($percent).'% dari periode sebelumnya';
+        } elseif ($diff < 0) {
+            $trend = 'down';
+            $tone = $higherIsPositive ? 'negative' : 'neutral';
+            $caption = 'Turun '.abs($percent).'% dari periode sebelumnya';
+        } else {
+            $trend = 'flat';
+            $tone = 'neutral';
+            $caption = 'Stabil 0% dari periode sebelumnya';
+        }
+
+        return [
+            'label' => $label,
+            'total' => $total,
+            'current_period' => $currentPeriod,
+            'previous_period' => $previousPeriod,
+            'percent' => $percent,
+            'trend' => $trend,
+            'tone' => $tone,
+            'caption' => $caption,
+        ];
+    }
+
+    /**
+     * Build multi-series content statistics (Resep, Makanan, Pengunjung) for the given range.
+     *
+     * @param  array{range: string, labels: array<int, string>, data: array<int, int>}  $visitorChart
+     * @return array{range: string, labels: array<int, string>, recipes: array<int, int>, foods: array<int, int>, visitors: array<int, int>}
+     */
+    private function buildContentSeries(string $range, array $visitorChart): array
+    {
+        $labels = $visitorChart['labels'];
+        $visitors = $visitorChart['data'];
+        $recipes = [];
+        $foods = [];
+
+        if ($range === '12m') {
+            $start = Carbon::now()->startOfMonth()->subMonths(11);
+            $end = Carbon::now()->endOfMonth();
+
+            $recipesByMonth = Schema::hasTable('recipes')
+                ? Recipe::whereBetween('created_at', [$start, $end])->get(['created_at'])
+                    ->groupBy(fn (Recipe $r): string => $r->created_at->format('Y-m'))
+                    ->map(fn ($g): int => $g->count())
+                : collect();
+
+            $foodsByMonth = Schema::hasTable('foods')
+                ? Food::whereBetween('created_at', [$start, $end])->get(['created_at'])
+                    ->groupBy(fn (Food $f): string => $f->created_at->format('Y-m'))
+                    ->map(fn ($g): int => $g->count())
+                : collect();
+
+            for ($i = 11; $i >= 0; $i--) {
+                $key = Carbon::now()->startOfMonth()->subMonths($i)->format('Y-m');
+                $recipes[] = (int) ($recipesByMonth[$key] ?? 0);
+                $foods[] = (int) ($foodsByMonth[$key] ?? 0);
+            }
+        } else {
+            $days = $range === '30d' ? 30 : 7;
+            $start = Carbon::now()->startOfDay()->subDays($days - 1);
+            $end = Carbon::now()->endOfDay();
+
+            $recipesByDay = Schema::hasTable('recipes')
+                ? Recipe::whereBetween('created_at', [$start, $end])->get(['created_at'])
+                    ->groupBy(fn (Recipe $r): string => $r->created_at->format('Y-m-d'))
+                    ->map(fn ($g): int => $g->count())
+                : collect();
+
+            $foodsByDay = Schema::hasTable('foods')
+                ? Food::whereBetween('created_at', [$start, $end])->get(['created_at'])
+                    ->groupBy(fn (Food $f): string => $f->created_at->format('Y-m-d'))
+                    ->map(fn ($g): int => $g->count())
+                : collect();
+
+            for ($i = $days - 1; $i >= 0; $i--) {
+                $key = Carbon::now()->startOfDay()->subDays($i)->format('Y-m-d');
+                $recipes[] = (int) ($recipesByDay[$key] ?? 0);
+                $foods[] = (int) ($foodsByDay[$key] ?? 0);
+            }
+        }
+
+        return [
+            'range' => $range,
+            'labels' => $labels,
+            'recipes' => $recipes,
+            'foods' => $foods,
+            'visitors' => $visitors,
+        ];
+    }
+
+    /**
+     * Build a real chronological activity feed from database tables.
+     *
+     * @return array<int, array{type: string, text: string, time: string, timestamp: int}>
+     */
+    private function buildRecentActivities(): array
+    {
+        $items = [];
+
+        if (Schema::hasTable('recipes')) {
+            foreach (Recipe::with('user')->latest()->take(5)->get() as $recipe) {
+                $actor = $recipe->user?->name ?? 'Contributor';
+                $action = $recipe->approval_status === 'approved'
+                    ? 'Resep "'.$recipe->title.'" oleh '.$actor.' telah disetujui.'
+                    : $actor.' mengirimkan resep "'.$recipe->title.'".';
+                $items[] = [
+                    'type' => 'recipe',
+                    'text' => $action,
+                    'time' => $recipe->created_at ? $recipe->created_at->diffForHumans() : '-',
+                    'timestamp' => $recipe->created_at ? $recipe->created_at->getTimestamp() : 0,
+                ];
+            }
+        }
+
+        if (Schema::hasTable('reviews')) {
+            foreach (Review::with(['user', 'food'])->latest()->take(5)->get() as $review) {
+                $items[] = [
+                    'type' => 'review',
+                    'text' => ($review->user?->name ?? 'Pengguna').' memberi '.$review->rating.' bintang untuk '.($review->food?->name ?? 'kuliner').'.',
+                    'time' => $review->created_at ? $review->created_at->diffForHumans() : '-',
+                    'timestamp' => $review->created_at ? $review->created_at->getTimestamp() : 0,
+                ];
+            }
+        }
+
+        if (Schema::hasTable('contributor_requests')) {
+            foreach (ContributorRequest::with('user')->latest()->take(5)->get() as $req) {
+                $actor = $req->user?->name ?? 'Pengguna';
+                $text = $req->status === 'approved'
+                    ? $actor.' diterima sebagai Contributor baru.'
+                    : $actor.' mengajukan diri menjadi Contributor.';
+                $items[] = [
+                    'type' => 'contributor',
+                    'text' => $text,
+                    'time' => $req->created_at ? $req->created_at->diffForHumans() : '-',
+                    'timestamp' => $req->created_at ? $req->created_at->getTimestamp() : 0,
+                ];
+            }
+        }
+
+        usort($items, fn (array $a, array $b): int => $b['timestamp'] <=> $a['timestamp']);
+
+        return array_slice($items, 0, 8);
+    }
+
+    /**
+     * Build time-series visitor counts from the site_visits table.
+     *
+     * @return array{range: string, labels: array<int, string>, data: array<int, int>}
+     */
+    private function buildVisitorChart(string $range): array
+    {
+        $labels = [];
+        $data = [];
+
+        if (! Schema::hasTable('site_visits')) {
+            return [
+                'range' => $range,
+                'labels' => $labels,
+                'data' => $data,
+            ];
+        }
+
+        if ($range === '12m') {
+            $start = Carbon::now()->startOfMonth()->subMonths(11);
+            $end = Carbon::now()->endOfMonth();
+
+            $countsByMonth = SiteVisit::whereBetween('visit_date', [$start->toDateString(), $end->toDateString()])
+                ->get(['visit_date'])
+                ->groupBy(fn (SiteVisit $visit): string => Carbon::parse($visit->visit_date)->format('Y-m'))
+                ->map(fn ($group): int => $group->count());
+
+            for ($i = 11; $i >= 0; $i--) {
+                $month = Carbon::now()->startOfMonth()->subMonths($i);
+                $key = $month->format('Y-m');
+                $labels[] = $month->format('M Y');
+                $data[] = (int) ($countsByMonth[$key] ?? 0);
+            }
+
+            return [
+                'range' => $range,
+                'labels' => $labels,
+                'data' => $data,
+            ];
+        }
+
+        $days = $range === '30d' ? 30 : 7;
+        $start = Carbon::now()->startOfDay()->subDays($days - 1);
+        $end = Carbon::now()->endOfDay();
+
+        $countsByDay = SiteVisit::whereBetween('visit_date', [$start->toDateString(), $end->toDateString()])
+            ->get(['visit_date'])
+            ->groupBy(fn (SiteVisit $visit): string => Carbon::parse($visit->visit_date)->format('Y-m-d'))
+            ->map(fn ($group): int => $group->count());
+
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $day = Carbon::now()->startOfDay()->subDays($i);
+            $key = $day->format('Y-m-d');
+            $labels[] = $day->format('d M');
+            $data[] = (int) ($countsByDay[$key] ?? 0);
+        }
+
+        return [
+            'range' => $range,
+            'labels' => $labels,
+            'data' => $data,
+        ];
     }
 
     public function updateSubmissionStatus(Request $request, string $slug): RedirectResponse
     {
         $validated = $request->validate([
             'status' => ['required', 'in:approved,rejected,pending'],
-            'type'   => ['nullable', 'in:recipe,food,story'],
-            'id'     => ['nullable'],
+            'type' => ['nullable', 'in:recipe,food,story'],
+            'id' => ['nullable'],
         ]);
 
         $type = $validated['type'] ?? null;
@@ -544,7 +1147,7 @@ class PageController extends Controller
 
         $label = $validated['status'] === 'approved' ? 'disetujui' : ($validated['status'] === 'rejected' ? 'ditolak' : 'pending');
 
-        return back()->with('success', 'Status kiriman berhasil diperbarui menjadi ' . $label . '.');
+        return back()->with('success', 'Status kiriman berhasil diperbarui menjadi '.$label.'.');
     }
 
     /**

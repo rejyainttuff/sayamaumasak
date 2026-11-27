@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Bali Culinary — Dari Rasa Ke Hati')</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,47 +12,91 @@
     <link rel="stylesheet" href="{{ asset('Assets/css/recipes.css') }}?v={{ filemtime(public_path('Assets/css/recipes.css')) }}">
 </head>
 
-<body class="recipe-page">
-    <nav class="recipe-nav">
-        <div class="recipe-nav-inner">
-            <a href="{{ route('home') }}" class="bali-brand">Bali <span>Culinary</span></a>
+<body class="recipe-page @hasSection('hide_main_nav') has-account-nav @endif">
+    @php
+        // Modular compact icon path for Dynamic Island scroll state (easy to swap in one place)
+        $navCompactIcon = asset('Assets/images/image-for-reciepe.png');
+    @endphp
 
-            <div class="recipe-nav-links" id="main-nav-links">
-                <a href="{{ route('about') }}" class="{{ request()->routeIs('about') ? 'active' : '' }}">Tentang Kami</a>
-                <a href="{{ route('home') }}" class="{{ request()->routeIs('home') ? 'active' : '' }}">Beranda</a>
-                <a href="{{ route('explore') }}" class="{{ request()->routeIs('explore', 'recipe', 'recipe.create', 'food.detail') ? 'active' : '' }}">Resep</a>
-                <a href="{{ route('stories') }}" class="{{ request()->routeIs('stories') ? 'active' : '' }}">Cerita</a>
-            </div>
-
-            <div class="recipe-nav-right">
-                <form action="{{ route('explore') }}" method="GET" class="recipe-nav-search">
-                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari resep Bali..." aria-label="Cari resep Bali">
-                    <button type="submit" aria-label="Cari resep">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                            <circle cx="11" cy="11" r="7" />
-                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                        </svg>
-                    </button>
-                </form>
-
-                <a href="{{ auth()->check() ? route('account') : route('account') }}" class="recipe-icon-btn {{ request()->routeIs('account', 'favorites') ? 'active' : '' }}" title="{{ auth()->check() ? auth()->user()->name : 'Akun Saya' }}">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                    </svg>
-                    <span class="recipe-fav-count" id="nav-fav-count">0</span>
-                </a>
-
-                <button type="button" class="nav-mobile-toggle" id="nav-mobile-toggle" aria-label="Buka menu">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                        <line x1="3" y1="6" x2="21" y2="6" />
-                        <line x1="3" y1="12" x2="21" y2="12" />
-                        <line x1="3" y1="18" x2="21" y2="18" />
-                    </svg>
+    @hasSection('hide_main_nav')
+    @else
+        {{-- Desktop Floating Pill Navbar + Dynamic Island Scroll Morph --}}
+        <div class="floating-nav-shell" id="floating-nav-shell">
+            <nav class="floating-pill-nav" id="floating-pill-nav" aria-label="Navigasi Utama">
+                <button type="button" class="floating-nav-island-trigger" id="floating-nav-trigger" aria-label="Buka menu navigasi" aria-expanded="true">
+                    <img src="{{ $navCompactIcon }}" alt="Bali Culinary">
                 </button>
-            </div>
+
+                <div class="floating-pill-content">
+                    <a href="{{ route('home') }}" class="bali-brand floating-brand">Bali <span>Culinary</span></a>
+
+                    <div class="floating-pill-links">
+                        <a href="{{ route('about') }}" class="{{ request()->routeIs('about') ? 'active' : '' }}">Tentang</a>
+                        <a href="{{ route('home') }}" class="{{ request()->routeIs('home') ? 'active' : '' }}">Beranda</a>
+                        <a href="{{ route('explore') }}" class="{{ request()->routeIs('explore', 'recipe', 'recipe.create', 'food.detail', 'recipes.*') ? 'active' : '' }}">Resep</a>
+                        <a href="{{ route('stories') }}" class="{{ request()->routeIs('stories*') ? 'active' : '' }}">Cerita</a>
+                    </div>
+
+                    <div class="floating-pill-actions">
+                        <form action="{{ route('explore') }}" method="GET" class="recipe-nav-search">
+                            <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari resep..." aria-label="Cari resep Bali">
+                            <button type="submit" aria-label="Cari resep">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                                    <circle cx="11" cy="11" r="7" />
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                </svg>
+                            </button>
+                        </form>
+
+                        <a href="{{ route('account') }}" class="recipe-icon-btn {{ request()->routeIs('account*', 'favorites', 'submissions.*') ? 'active' : '' }}" title="{{ auth()->check() ? auth()->user()->name : 'Masuk / Akun Saya' }}">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </nav>
         </div>
-    </nav>
+
+        {{-- Mobile Bottom Navigation Bar --}}
+        <nav class="mobile-bottom-nav" aria-label="Navigasi Mobile">
+            <a href="{{ route('home') }}" class="mobile-bottom-item {{ request()->routeIs('home') ? 'active' : '' }}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />
+                </svg>
+                <span>Beranda</span>
+            </a>
+            <a href="{{ route('explore') }}" class="mobile-bottom-item {{ request()->routeIs('explore', 'recipe', 'food.detail', 'recipes.*') ? 'active' : '' }}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+                </svg>
+                <span>Resep</span>
+            </a>
+            <a href="{{ route('recipe.create') }}" class="mobile-bottom-item {{ request()->routeIs('recipe.create') ? 'active' : '' }}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="9" />
+                    <line x1="12" y1="8" x2="12" y2="16" />
+                    <line x1="8" y1="12" x2="16" y2="12" />
+                </svg>
+                <span>Bagikan</span>
+            </a>
+            <a href="{{ route('stories') }}" class="mobile-bottom-item {{ request()->routeIs('stories*') ? 'active' : '' }}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                </svg>
+                <span>Cerita</span>
+            </a>
+            <a href="{{ route('account') }}" class="mobile-bottom-item {{ request()->routeIs('account*', 'favorites', 'submissions.*', 'login', 'register') ? 'active' : '' }}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                </svg>
+                <span>{{ auth()->check() ? 'Akun' : 'Masuk' }}</span>
+            </a>
+        </nav>
+    @endif
 
     <main class="recipe-main">
         @yield('content')
@@ -76,7 +121,9 @@
                     @guest
                         <a href="{{ route('login') }}">Login</a>
                     @endguest
-                    <a href="{{ route('admin.dashboard') }}">Admin</a>
+                    @if (auth()->check() && auth()->user()->isAdmin())
+                        <a href="{{ route('admin.dashboard') }}">Admin</a>
+                    @endif
                 </div>
             </div>
         </footer>
@@ -84,76 +131,144 @@
 
     <script>
         (function () {
-            const STORAGE_KEY = 'baliculinary_favorites';
+            @auth
+            window.addEventListener('pageshow', function (event) {
+                if (event.persisted) {
+                    window.location.reload();
+                }
+            });
+            @endauth
 
-            const toggleBtn = document.getElementById('nav-mobile-toggle');
-            const navLinks = document.getElementById('main-nav-links');
-            if (toggleBtn && navLinks) {
-                toggleBtn.addEventListener('click', function () {
-                    navLinks.classList.toggle('is-open');
-                });
-            }
+            // Desktop Floating Pill Dynamic Island Scroll Morph
+            const pillNav = document.getElementById('floating-pill-nav');
+            const trigger = document.getElementById('floating-nav-trigger');
+            let userExpanded = false;
 
-            function getFavorites() {
-                try {
-                    const raw = localStorage.getItem(STORAGE_KEY);
-                    const parsed = raw ? JSON.parse(raw) : [];
-                    return Array.isArray(parsed) ? parsed : [];
-                } catch (e) {
-                    return [];
+            function syncPillState() {
+                if (!pillNav) {
+                    return;
+                }
+                if (window.innerWidth <= 860) {
+                    pillNav.classList.remove('is-collapsed', 'is-expanded');
+                    return;
+                }
+                if (window.scrollY > 140) {
+                    if (!userExpanded) {
+                        pillNav.classList.add('is-collapsed');
+                        pillNav.classList.remove('is-expanded');
+                        if (trigger) {
+                            trigger.setAttribute('aria-expanded', 'false');
+                        }
+                    }
+                } else {
+                    userExpanded = false;
+                    pillNav.classList.remove('is-collapsed', 'is-expanded');
+                    if (trigger) {
+                        trigger.setAttribute('aria-expanded', 'true');
+                    }
                 }
             }
 
-            function saveFavorites(list) {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-            }
-
-            function syncUI() {
-                const favs = getFavorites();
-                const badge = document.getElementById('nav-fav-count');
-                if (badge) {
-                    badge.textContent = favs.length;
-                    badge.classList.toggle('has-items', favs.length > 0);
-                }
-
-                document.querySelectorAll('.js-favorite-toggle').forEach(function (btn) {
-                    const slug = btn.getAttribute('data-slug');
-                    const isSaved = favs.includes(slug);
-                    btn.classList.toggle('is-saved', isSaved);
-                    btn.setAttribute('aria-pressed', isSaved ? 'true' : 'false');
-
-                    const label = btn.querySelector('.js-fav-label');
-                    if (label) {
-                        label.textContent = isSaved ? 'Tersimpan' : 'Simpan Resep';
+            if (trigger && pillNav) {
+                trigger.addEventListener('click', function () {
+                    if (pillNav.classList.contains('is-collapsed')) {
+                        userExpanded = true;
+                        pillNav.classList.remove('is-collapsed');
+                        pillNav.classList.add('is-expanded');
+                        trigger.setAttribute('aria-expanded', 'true');
+                    } else if (window.scrollY > 140) {
+                        userExpanded = false;
+                        pillNav.classList.add('is-collapsed');
+                        pillNav.classList.remove('is-expanded');
+                        trigger.setAttribute('aria-expanded', 'false');
                     }
                 });
 
-                window.dispatchEvent(new CustomEvent('favorites:updated', { detail: { favs: favs } }));
+                document.addEventListener('click', function (event) {
+                    if (userExpanded && window.scrollY > 140 && !pillNav.contains(event.target)) {
+                        userExpanded = false;
+                        syncPillState();
+                    }
+                });
+
+                window.addEventListener('scroll', syncPillState, { passive: true });
+                window.addEventListener('resize', syncPillState, { passive: true });
+                syncPillState();
             }
 
-            document.addEventListener('click', function (event) {
-                const btn = event.target.closest('.js-favorite-toggle');
-                if (!btn) {
+            // Active Reading Progress Tracker (authenticated users only, pauses on hidden tab or inactivity)
+            window.initBaliReadingTracker = function (contentType, contentId) {
+                @guest
+                return;
+                @else
+                if (!contentType || !contentId) {
                     return;
                 }
-                event.preventDefault();
-                const slug = btn.getAttribute('data-slug');
-                if (!slug) {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                if (!csrfToken) {
                     return;
                 }
 
-                const favs = getFavorites();
-                const idx = favs.indexOf(slug);
-                if (idx >= 0) {
-                    favs.splice(idx, 1);
-                } else {
-                    favs.push(slug);
-                }
-                saveFavorites(favs);
-                syncUI();
-            });
+                const sessionToken = (window.crypto && crypto.randomUUID)
+                    ? crypto.randomUUID().replace(/-/g, '')
+                    : ('sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10));
 
-            syncUI();
+                let lastActivityAt = Date.now();
+                let activeSecondsBuffer = 0;
+                const INACTIVITY_LIMIT_MS = 60000;
+                const FLUSH_INTERVAL_SEC = 15;
+
+                ['scroll', 'mousemove', 'keydown', 'touchstart', 'click'].forEach(function (evt) {
+                    window.addEventListener(evt, function () {
+                        lastActivityAt = Date.now();
+                    }, { passive: true });
+                });
+
+                function flushHeartbeat(seconds) {
+                    if (seconds <= 0) {
+                        return;
+                    }
+                    fetch("{{ route('reading.heartbeat') }}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken
+                        },
+                        credentials: 'same-origin',
+                        keepalive: true,
+                        body: JSON.stringify({
+                            content_type: contentType,
+                            content_id: Number(contentId),
+                            session_token: sessionToken,
+                            delta_seconds: Math.min(30, seconds)
+                        })
+                    }).catch(function () {});
+                }
+
+                setInterval(function () {
+                    const isVisible = document.visibilityState === 'visible';
+                    const isRecentlyActive = (Date.now() - lastActivityAt) <= INACTIVITY_LIMIT_MS;
+
+                    if (isVisible && isRecentlyActive) {
+                        activeSecondsBuffer += 1;
+                        if (activeSecondsBuffer >= FLUSH_INTERVAL_SEC) {
+                            const toSend = activeSecondsBuffer;
+                            activeSecondsBuffer = 0;
+                            flushHeartbeat(toSend);
+                        }
+                    }
+                }, 1000);
+
+                document.addEventListener('visibilitychange', function () {
+                    if (document.visibilityState === 'hidden' && activeSecondsBuffer >= 5) {
+                        const toSend = activeSecondsBuffer;
+                        activeSecondsBuffer = 0;
+                        flushHeartbeat(toSend);
+                    }
+                });
+                @endguest
+            };
         })();
     </script>
 

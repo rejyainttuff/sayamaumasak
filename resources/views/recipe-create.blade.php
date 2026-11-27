@@ -30,15 +30,20 @@
 
             <div class="share-layout">
                 <aside class="share-left-col">
-                    <div class="terms-card">
-                        <h2>Ketentuan Berbagi Resep</h2>
-                        <ol class="terms-list">
-                            <li>Pastikan resep merupakan kuliner khas Bali yang autentik dengan takaran bahan yang jelas.</li>
-                            <li>Sertakan langkah memasak yang runtut dan mudah dipahami agar siap ditinjau oleh admin Bali Culinary.</li>
-                        </ol>
+                    <div class="recipe-guide-visual">
+                        <img src="{{ asset('Assets/images/image-for-reciepe.png') }}" alt="Ilustrasi Kuliner Bali" class="recipe-guide-img">
                     </div>
 
-                    <img src="{{ asset('Assets/images/decor-temple.png') }}" alt="Ilustrasi Pura Bali" class="share-temple-art">
+                    <div class="terms-card">
+                        <h2>Panduan Pengajuan Resep</h2>
+                        <ol class="terms-list">
+                            <li>Gunakan nama resep kuliner Bali yang jelas dan mudah dikenali.</li>
+                            <li>Sertakan daftar bahan-bahan serta takaran secara lengkap.</li>
+                            <li>Tulis langkah memasak secara berurutan agar mudah diikuti pembaca.</li>
+                            <li>Gunakan foto hidangan yang relevan, terang, dan tidak buram.</li>
+                            <li>Pastikan seluruh informasi resep akurat dan siap ditinjau Admin.</li>
+                        </ol>
+                    </div>
                 </aside>
 
                 <div class="share-form-card">

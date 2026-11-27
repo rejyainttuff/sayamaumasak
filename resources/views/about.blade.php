@@ -3,7 +3,7 @@
 @section('title', 'Tentang Kami — Bali Culinary')
 
 @section('content')
-    <header class="bali-hero hero-home">
+    <header class="bali-hero hero-beranda">
         <div class="bali-hero-inner">
             <div class="bali-hero-content">
                 <h1>Tentang <span class="accent">Bali Culinary</span></h1>

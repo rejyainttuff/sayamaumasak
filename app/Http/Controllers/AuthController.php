@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Models\User;
 
 class AuthController extends Controller
 {
@@ -25,7 +25,11 @@ class AuthController extends Controller
 
             $role = $request->user()?->role;
 
-            if (in_array($role, ['admin', 'helper'], true)) {
+            if ($role === 'admin') {
+                return redirect()->intended('/admin');
+            }
+
+            if (in_array($role, ['helper', 'contributor'], true)) {
                 return redirect()->intended('/recipes');
             }
 
@@ -50,28 +54,31 @@ class AuthController extends Controller
     }
 
     public function showRegisterForm()
-{
-    return view('auth.register');
-}
+    {
+        return view('auth.register');
+    }
 
-public function register(Request $request)
-{
-    $validated = $request->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-        'password' => ['required', 'string', 'min:8', 'confirmed'],
-    ]);
+    public function register(Request $request)
+    {
+        $validated = $request->validate([
+            'username' => ['nullable', 'string', 'max:60', 'unique:users,username'],
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
 
-    $user = User::create([
-        'name' => $validated['name'],
-        'email' => $validated['email'],
-        'password' => $validated['password'], // otomatis di-hash karena cast 'password' => 'hashed' di User.php
-        'role' => 'user',
-    ]);
+        $user = User::create([
+            'name' => $validated['name'],
+            'username' => ! empty($validated['username']) ? ltrim(trim($validated['username']), '@') : null,
+            'email' => $validated['email'],
+            'password' => $validated['password'], // otomatis di-hash karena cast 'password' => 'hashed' di User.php
+            'role' => 'user',
+            'contributor_level' => 1,
+        ]);
 
-    Auth::login($user);
-    $request->session()->regenerate();
+        Auth::login($user);
+        $request->session()->regenerate();
 
-    return redirect()->route('home')->with('success', 'Registrasi berhasil! Selamat datang di SayaMauMasak.');
-}
+        return redirect()->route('home')->with('success', 'Registrasi berhasil! Selamat datang di SayaMauMasak.');
+    }
 }

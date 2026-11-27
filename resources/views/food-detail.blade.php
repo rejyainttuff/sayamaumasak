@@ -30,17 +30,32 @@
                                 <span class="detail-sample-label">Sample<br>gambar</span>
                             @endif
 
-                            <button
-                                type="button"
-                                class="recipe-card-heart js-favorite-toggle {{ ! empty($isFavorited) ? 'is-saved' : '' }}"
-                                data-slug="{{ $food['slug'] }}"
-                                aria-label="Simpan {{ $food['name'] }} ke favorit"
-                                title="Simpan ke Favorit"
-                            >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                                </svg>
-                            </button>
+                            @auth
+                                <form action="{{ route('favorites.toggle', $food['slug']) }}" method="POST" style="display: inline;">
+                                    @csrf
+                                    <button
+                                        type="submit"
+                                        class="recipe-card-heart {{ ! empty($isFavorited) ? 'is-saved' : '' }}"
+                                        aria-label="Simpan {{ $food['name'] }} ke favorit"
+                                        title="Simpan ke Favorit"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                                        </svg>
+                                    </button>
+                                </form>
+                            @else
+                                <a
+                                    href="{{ route('login') }}"
+                                    class="recipe-card-heart"
+                                    aria-label="Login untuk menyimpan {{ $food['name'] }} ke favorit"
+                                    title="Login untuk Simpan ke Favorit"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                                    </svg>
+                                </a>
+                            @endauth
                         </div>
 
                         <div class="detail-info-col">
@@ -56,10 +71,10 @@
                                         </button>
                                     </form>
                                 @else
-                                    <button type="button" class="pill-tag js-favorite-toggle" data-slug="{{ $food['slug'] }}">
+                                    <a href="{{ route('login') }}" class="pill-tag">
                                         <span>&#9829;</span>
-                                        <span class="js-fav-label">Simpan Resep</span>
-                                    </button>
+                                        <span>Simpan Resep</span>
+                                    </a>
                                 @endauth
                             </div>
 
@@ -118,26 +133,43 @@
 
                     <div class="detail-panel">
                         <h3 style="font-size: 19px; margin-bottom: 8px;">Beri Rating</h3>
-                        <div class="rating-stars" id="rating-stars" role="radiogroup" aria-label="Beri rating resep">
-                            @for ($i = 1; $i <= 5; $i++)
-                                <button
-                                    type="button"
-                                    class="rating-star-btn {{ $i === 1 ? 'active' : '' }}"
-                                    data-value="{{ $i }}"
-                                    aria-label="Rating {{ $i }} bintang"
-                                >&#9733;</button>
-                            @endfor
-                        </div>
-                        <button type="button" id="submit-rating-btn" class="btn-terracotta rect" style="width: 100%; height: 36px; font-size: 12.5px;">
-                            Kirim Rating
-                        </button>
-                        <div class="rating-feedback" id="rating-feedback" aria-live="polite"></div>
+                        @auth
+                            <form action="{{ route('reviews.store', $food['slug']) }}" method="POST">
+                                @csrf
+                                <input type="hidden" name="rating" id="sidebar-rating-input" value="5">
+                                <div class="rating-stars" id="rating-stars" role="radiogroup" aria-label="Beri rating resep">
+                                    @for ($i = 1; $i <= 5; $i++)
+                                        <button
+                                            type="button"
+                                            class="rating-star-btn active"
+                                            data-value="{{ $i }}"
+                                            aria-label="Rating {{ $i }} bintang"
+                                        >&#9733;</button>
+                                    @endfor
+                                </div>
+                                <button type="submit" class="btn-terracotta rect" style="width: 100%; height: 36px; font-size: 12.5px;">
+                                    Kirim Rating
+                                </button>
+                            </form>
+                        @else
+                            <div class="rating-stars" id="rating-stars" role="radiogroup" aria-label="Beri rating resep">
+                                @for ($i = 1; $i <= 5; $i++)
+                                    <button
+                                        type="button"
+                                        class="rating-star-btn {{ $i === 1 ? 'active' : '' }}"
+                                        data-value="{{ $i }}"
+                                        aria-label="Rating {{ $i }} bintang"
+                                    >&#9733;</button>
+                                @endfor
+                            </div>
+                            <a href="{{ route('login') }}" class="btn-terracotta rect" style="width: 100%; height: 36px; font-size: 12.5px;">
+                                Masuk untuk Beri Rating
+                            </a>
+                        @endauth
                     </div>
                 </aside>
             </div>
         </div>
-
-        <img src="{{ asset('Assets/images/decor-hibiscus.png') }}" alt="" class="corner-hibiscus bottom-right" aria-hidden="true">
     </section>
     <section class="recipe-container" style="padding-bottom: 48px;">
         <div class="detail-panel">
@@ -204,11 +236,10 @@
     <script>
         (function () {
             const stars = document.querySelectorAll('#rating-stars .rating-star-btn');
-            const submitBtn = document.getElementById('submit-rating-btn');
-            const feedback = document.getElementById('rating-feedback');
+            const ratingInput = document.getElementById('sidebar-rating-input');
             const videoBox = document.getElementById('sample-video-box');
             const videoLabel = document.getElementById('sample-video-label');
-            let selectedRating = 1;
+            let selectedRating = ratingInput ? Number(ratingInput.value) : 1;
 
             function paintStars(val) {
                 stars.forEach(function (btn) {
@@ -220,20 +251,21 @@
             stars.forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     selectedRating = Number(btn.getAttribute('data-value'));
+                    if (ratingInput) {
+                        ratingInput.value = String(selectedRating);
+                    }
                     paintStars(selectedRating);
                 });
             });
-
-            if (submitBtn && feedback) {
-                submitBtn.addEventListener('click', function () {
-                    feedback.textContent = 'Terima kasih! Kamu memberi ' + selectedRating + ' bintang untuk resep ini.';
-                });
-            }
 
             if (videoBox && videoLabel) {
                 videoBox.addEventListener('click', function () {
                     videoLabel.textContent = 'Preview video tutorial memasak {{ $food['name'] }}';
                 });
+            }
+
+            if (typeof window.initBaliReadingTracker === 'function' && {{ (int) ($food['id'] ?? 0) }} > 0) {
+                window.initBaliReadingTracker('food', {{ (int) ($food['id'] ?? 0) }});
             }
         })();
     </script>

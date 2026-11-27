@@ -14,8 +14,20 @@ class CulinaryStory extends Model
         'slug',
         'content',
         'thumbnail',
+        'gallery_images',
+        'video_url',
         'approval_status',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'gallery_images' => 'array',
+        ];
+    }
 
     public function food(): BelongsTo
     {

@@ -13,51 +13,20 @@
 
 <body class="recipe-page">
     <div class="admin-shell">
-        <aside class="admin-sidebar">
-            <a href="{{ route('home') }}" class="bali-brand stacked">
-                Bali
-                <span>Culinary</span>
-            </a>
-
-            <nav class="admin-nav" aria-label="Menu Admin">
-                <a href="{{ route('admin.dashboard') }}" class="active">Dashboard</a>
-                <a href="{{ route('explore') }}">Food Management</a>
-                <a href="{{ route('recipes.index') }}">Recipe Management</a>
-                <a href="{{ route('explore', ['category' => 'Makanan']) }}">Category Management</a>
-                <a href="#pending-submissions">Pending Recipe Submissions</a>
-                <a href="{{ route('account') }}#reviews">Reviews Management</a>
-                <a href="{{ route('stories') }}">Culinary Stories / Culture</a>
-
-                <div class="admin-nav-divider"></div>
-
-                <a href="{{ route('account') }}">User Management</a>
-                <a href="{{ route('admin.dashboard') }}">Admin &amp; Role Management</a>
-
-                <div class="admin-nav-divider"></div>
-
-                <a href="#statistik-resep">Reports &amp; Analytics</a>
-                <a href="{{ route('about') }}">Website Settings</a>
-                <a href="{{ route('password.change') }}">Profile Settings</a>
-            </nav>
-
-            <form action="{{ route('logout') }}" method="POST">
-                @csrf
-                <button type="submit" class="account-logout-btn">&#8617; Logout</button>
-            </form>
-        </aside>
+        @include('admin.partials.sidebar')
 
         <div class="admin-workspace">
             <header class="admin-topbar">
                 <div class="recipe-nav-links" style="display: flex;">
-                    <a href="{{ route('about') }}">Tentang Kami</a>
                     <a href="{{ route('home') }}">Beranda</a>
                     <a href="{{ route('explore') }}">Resep</a>
                     <a href="{{ route('stories') }}">Cerita</a>
+                    <a href="{{ route('about') }}">Tentang Kami</a>
                 </div>
 
                 <div class="recipe-nav-right">
                     <form action="{{ route('explore') }}" method="GET" class="recipe-nav-search">
-                        <input type="text" name="search" placeholder="Cari resep..." aria-label="Cari resep">
+                        <input type="text" name="search" placeholder="Cari apapun..." aria-label="Cari apapun">
                         <button type="submit" aria-label="Cari">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                                 <circle cx="11" cy="11" r="7" />
@@ -77,7 +46,7 @@
             <section class="admin-hero">
                 <div class="admin-hero-content">
                     <h1>Selamat Datang, Admin!</h1>
-                    <p>Pantau aktivitas kuliner Bali, statistik resep, dan tinjau kiriman resep terbaru di sini.</p>
+                    <p>Pantau statistik kuliner Bali, distribusi konten, aktivitas terbaru, dan tinjau pengajuan Contributor.</p>
                 </div>
             </section>
 
@@ -86,151 +55,259 @@
                     <div class="alert-banner success" style="margin-bottom: 0;">{{ session('success') }}</div>
                 @endif
 
+                {{-- A. 4 Statistik Utama (Bahasa Indonesia + Ikon + Indikator Persentase Nyata) --}}
                 <div class="admin-stats-grid">
-                    <div class="admin-stat-card">
-                        <span>Total Makanan</span>
-                        <strong>{{ $stats['foods'] }}</strong>
+                    @php
+                        $cardIcons = [
+                            'foods' => '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>',
+                            'recipes' => '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>',
+                            'contributors' => '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+                            'reviews' => '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+                        ];
+                    @endphp
+
+                    @foreach ($statCards as $key => $card)
+                        <div class="admin-stat-card detailed">
+                            <div class="admin-stat-icon">{!! $cardIcons[$key] !!}</div>
+                            <span class="admin-stat-label">{{ $card['label'] }}</span>
+                            <strong class="admin-stat-value">{{ $card['total'] }}</strong>
+                            <span class="admin-stat-delta tone-{{ $card['tone'] }}">
+                                {{ $card['caption'] }}
+                            </span>
+                        </div>
+                    @endforeach
+                </div>
+
+                {{-- B & C. Statistik Konten (Dominan) + Pie/Doughnut Chart --}}
+                <div class="admin-charts-grid" id="statistik-resep">
+                    <div class="admin-card white">
+                        <div class="admin-card-head" style="flex-wrap: wrap;">
+                            <div>
+                                <h2>Statistik Konten</h2>
+                                <span style="font-size: 11.5px; color: var(--muted);">Resep, Makanan, dan Pengunjung berdasarkan database</span>
+                            </div>
+                            <div class="admin-range-filters" role="group" aria-label="Filter rentang waktu statistik">
+                                <a href="{{ route('admin.dashboard', ['range' => '7d']) }}" class="pill-tag {{ $contentSeries['range'] === '7d' ? 'active' : '' }}">7 Hari</a>
+                                <a href="{{ route('admin.dashboard', ['range' => '30d']) }}" class="pill-tag {{ $contentSeries['range'] === '30d' ? 'active' : '' }}">30 Hari</a>
+                                <a href="{{ route('admin.dashboard', ['range' => '12m']) }}" class="pill-tag {{ $contentSeries['range'] === '12m' ? 'active' : '' }}">12 Bulan</a>
+                            </div>
+                        </div>
+                        <div class="chart-canvas-wrap">
+                            <canvas id="contentLineChart" aria-label="Grafik Statistik Konten"></canvas>
+                        </div>
                     </div>
-                    <div class="admin-stat-card">
-                        <span>Total Resep</span>
-                        <strong>{{ $stats['recipes'] }}</strong>
-                    </div>
-                    <div class="admin-stat-card">
-                        <span>Resep Menunggu Review</span>
-                        <strong>{{ $stats['pending'] }}</strong>
-                    </div>
-                    <div class="admin-stat-card">
-                        <span>Total Ulasan</span>
-                        <strong>{{ $stats['reviews'] }}</strong>
+
+                    <div class="admin-card white">
+                        <div class="admin-card-head">
+                            <h2>Distribusi Konten</h2>
+                            <span style="font-size: 11.5px; color: var(--muted);">Data Asli DB</span>
+                        </div>
+                        <div class="chart-canvas-wrap">
+                            <canvas id="contentDoughnutChart" aria-label="Grafik Distribusi Konten"></canvas>
+                        </div>
                     </div>
                 </div>
 
-                <div class="admin-mid-grid">
-                    <div class="admin-card white" id="statistik-resep">
+                {{-- D, E, F, G. Resep Terbaru (~30%) + Konten Menunggu Persetujuan (~20%) + Aktivitas Terbaru (~20%) --}}
+                <div class="admin-lower-grid">
+                    <div class="admin-card white">
                         <div class="admin-card-head">
-                            <h2>Statistik Resep</h2>
-                            <span style="font-size: 11px; color: var(--muted);">Jan &ndash; Jul</span>
-                        </div>
-
-                        <div style="display: flex; gap: 14px; font-size: 11px; color: var(--muted); margin-bottom: 10px;">
-                            <span><strong style="color: var(--terracotta);">&bull;</strong> Resep Baru</span>
-                            <span><strong style="color: var(--sage);">&bull;</strong> Disetujui</span>
-                            <span><strong style="color: #b79c7d;">&bull;</strong> Ulasan</span>
-                        </div>
-
-                        <svg viewBox="0 0 420 175" style="width: 100%; height: auto; display: block;" role="img" aria-label="Grafik Statistik Resep">
-                            <g stroke="#efe2d0" stroke-width="1">
-                                <line x1="30" y1="25" x2="405" y2="25" />
-                                <line x1="30" y1="60" x2="405" y2="60" />
-                                <line x1="30" y1="95" x2="405" y2="95" />
-                                <line x1="30" y1="130" x2="405" y2="130" />
-                            </g>
-
-                            <path d="M35,102 L95,72 L155,86 L215,58 L275,70 L335,40 L395,28 L395,148 L35,148 Z" fill="rgba(183, 156, 125, 0.22)" />
-                            <polyline class="chart-line-draw" points="35,102 95,72 155,86 215,58 275,70 335,40 395,28" fill="none" stroke="#b79c7d" stroke-width="2" />
-
-                            <path d="M35,118 L95,88 L155,102 L215,78 L275,90 L335,68 L395,56 L395,148 L35,148 Z" fill="rgba(144, 150, 94, 0.24)" />
-                            <polyline class="chart-line-draw delay-1" points="35,118 95,88 155,102 215,78 275,90 335,68 395,56" fill="none" stroke="#717542" stroke-width="2.2" />
-
-                            <path d="M35,134 L95,112 L155,124 L215,106 L275,116 L335,96 L395,84 L395,148 L35,148 Z" fill="rgba(192, 90, 43, 0.2)" />
-                            <polyline class="chart-line-draw delay-2" points="35,134 95,112 155,124 215,106 275,116 335,96 395,84" fill="none" stroke="#c05a2b" stroke-width="2.2" />
-
-                            <g fill="#6e5849" font-size="10" text-anchor="middle" font-family="Poppins, sans-serif">
-                                <text x="35" y="165">Jan</text>
-                                <text x="95" y="165">Feb</text>
-                                <text x="155" y="165">Mar</text>
-                                <text x="215" y="165">Apr</text>
-                                <text x="275" y="165">Mei</text>
-                                <text x="335" y="165">Jun</text>
-                                <text x="395" y="165">Jul</text>
-                            </g>
-                        </svg>
-                    </div>
-
-                    <div class="admin-card">
-                        <div class="admin-card-head">
-                            <h2>Menu Baru</h2>
-                            <a href="{{ route('explore') }}">Lihat Semua &rarr;</a>
+                            <h2>Resep Terbaru</h2>
+                            <a href="{{ route('recipes.index') }}">Lihat Semua &rarr;</a>
                         </div>
 
                         <div class="menu-baru-list">
-                            @foreach ($recentMenu as $item)
+                            @forelse ($recentMenu as $item)
                                 <div class="menu-baru-item">
-                                    <div class="menu-baru-thumb"></div>
-                                    <div>
-                                        <a href="{{ route('food.detail', $item['slug']) }}" style="font-size: 13.5px; font-weight: 700; color: var(--terracotta); text-decoration: none;">
+                                    <div class="menu-baru-thumb" style="overflow: hidden;">
+                                        @if (! empty($item['image']) && file_exists(public_path(ltrim($item['image'], '/'))))
+                                            <img src="{{ asset(ltrim($item['image'], '/')) }}" alt="{{ $item['name'] }}" style="width: 100%; height: 100%; object-fit: cover;">
+                                        @endif
+                                    </div>
+                                    <div style="min-width: 0;">
+                                        <a href="{{ route('recipes.show', $item['id']) }}" style="font-size: 13.5px; font-weight: 700; color: var(--terracotta); text-decoration: none;">
                                             {{ $item['name'] }}
                                         </a>
-                                        <div style="font-size: 11.5px; color: var(--muted);">{{ $item['author'] }}</div>
+                                        <div style="font-size: 11.5px; color: var(--muted);">
+                                            {{ $item['author'] }} &middot; {{ $item['published_at'] }}
+                                        </div>
                                     </div>
                                     <span class="status-pill {{ $item['status'] }}">{{ ucfirst($item['status']) }}</span>
-                                    <span style="font-size: 11px; color: var(--muted); white-space: nowrap;">{{ $item['time'] }}</span>
                                 </div>
-                            @endforeach
+                            @empty
+                                <p style="font-size: 13px; color: var(--muted); margin: 6px 0;">Belum ada resep yang dipublikasikan.</p>
+                            @endforelse
+                        </div>
+                    </div>
+
+                    <div class="admin-side-stack">
+                        <div class="admin-card white" id="pending-submissions">
+                            <div class="admin-card-head">
+                                <h2>Menunggu Persetujuan</h2>
+                                <a href="{{ route('admin.recipes.approvals') }}">Buka Daftar &rarr;</a>
+                            </div>
+
+                            <div class="pending-summary-list">
+                                <a href="{{ route('admin.recipes.approvals', ['status' => 'pending']) }}" class="pending-summary-row">
+                                    <span>Pengajuan Resep</span>
+                                    <strong>{{ $pendingSummary['recipes'] }}</strong>
+                                </a>
+                                <a href="{{ route('foods.index') }}" class="pending-summary-row">
+                                    <span>Pengajuan Makanan</span>
+                                    <strong>{{ $pendingSummary['foods'] }}</strong>
+                                </a>
+                                <a href="{{ route('stories') }}" class="pending-summary-row">
+                                    <span>Pengajuan Cerita Kuliner</span>
+                                    <strong>{{ $pendingSummary['stories'] }}</strong>
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="admin-card white">
+                            <div class="admin-card-head">
+                                <h2>Aktivitas Terbaru</h2>
+                            </div>
+                            <ul class="activity-feed-list">
+                                @forelse ($recentActivities as $act)
+                                    <li>
+                                        <span class="activity-dot type-{{ $act['type'] }}"></span>
+                                        <div>
+                                            <p>{{ $act['text'] }}</p>
+                                            <small>{{ $act['time'] }}</small>
+                                        </div>
+                                    </li>
+                                @empty
+                                    <li style="color: var(--muted); font-size: 12.5px;">Belum ada aktivitas tercatat.</li>
+                                @endforelse
+                            </ul>
                         </div>
                     </div>
                 </div>
 
-                <div class="admin-card" id="pending-submissions">
+                {{-- H. Ringkasan 1 Card Pengajuan Contributor di Bagian Paling Bawah --}}
+                <div class="admin-card white" id="pending-contributors">
                     <div class="admin-card-head">
-                        <h2>Resep Menunggu Persetujuan</h2>
-                        <a href="{{ route('recipes.index') }}">Lihat Semua &rarr;</a>
+                        <h2>Ringkasan Pengajuan Contributor</h2>
+                        <a href="{{ route('admin.contributors.index') }}">Lihat Semua Pengajuan ({{ $pendingContributorRequests->count() }}) &rarr;</a>
                     </div>
 
-                    @forelse ($pendingSubmissions as $sub)
-                        <div class="pending-row">
-                            <div class="pending-thumb"></div>
-                            <div>
-                                <div style="font-size: 14px; font-weight: 700; color: var(--terracotta);">
-                                    {{ $sub['name'] }}
-                                    <span style="font-size: 11px; font-weight: 500; color: var(--muted);">({{ $sub['label'] }})</span>
+                    @if ($latestContributorRequest)
+                        <a href="{{ route('admin.contributors.index') }}" class="contributor-summary-card">
+                            <div style="flex: 1; min-width: 220px;">
+                                <div style="font-size: 15px; font-weight: 700; color: var(--terracotta);">
+                                    {{ $latestContributorRequest->user?->name ?? 'Pengguna' }}
                                 </div>
-                                <div style="font-size: 12px; color: var(--muted);">
-                                    {{ $sub['author'] }} &middot; Status: <strong>{{ ucfirst($sub['status']) }}</strong>
+                                <div style="font-size: 12.5px; color: var(--muted); margin-top: 2px;">
+                                    {{ $latestContributorRequest->user?->email ?? '-' }} &middot;
+                                    Diajukan pada {{ $latestContributorRequest->created_at?->format('d M Y, H:i') }}
                                 </div>
                             </div>
-
-                            @if (!empty($sub['slug']))
-                                <a href="{{ route('food.detail', $sub['slug']) }}" class="action-btn review">Review</a>
-                            @endif
-
-                            <div style="display: flex; gap: 6px;">
-                                @if ($sub['type'] === 'recipe' && !empty($sub['model']))
-                                    <form action="{{ route('recipes.approve', $sub['model']) }}" method="POST">
-                                        @csrf
-                                        @method('PATCH')
-                                        <button type="submit" class="action-btn approve">Approve</button>
-                                    </form>
-                                    <form action="{{ route('recipes.reject', $sub['model']) }}" method="POST">
-                                        @csrf
-                                        @method('PATCH')
-                                        <button type="submit" class="action-btn reject">Reject</button>
-                                    </form>
-                                @else
-                                    <form action="{{ route('admin.submission.status', $sub['slug'] ?: $sub['id']) }}" method="POST">
-                                        @csrf
-                                        <input type="hidden" name="type" value="{{ $sub['type'] }}">
-                                        <input type="hidden" name="id" value="{{ $sub['id'] }}">
-                                        <input type="hidden" name="status" value="approved">
-                                        <button type="submit" class="action-btn approve">Approve</button>
-                                    </form>
-                                    <form action="{{ route('admin.submission.status', $sub['slug'] ?: $sub['id']) }}" method="POST">
-                                        @csrf
-                                        <input type="hidden" name="type" value="{{ $sub['type'] }}">
-                                        <input type="hidden" name="id" value="{{ $sub['id'] }}">
-                                        <input type="hidden" name="status" value="rejected">
-                                        <button type="submit" class="action-btn reject">Reject</button>
-                                    </form>
-                                @endif
-                            </div>
-                        </div>
-                    @empty
-                        <p style="font-size: 13px; color: var(--muted); margin: 8px 0;">Tidak ada kiriman yang menunggu persetujuan.</p>
-                    @endforelse
+                            <span class="status-pill {{ $latestContributorRequest->status }}">{{ ucfirst($latestContributorRequest->status) }}</span>
+                            <span class="pill-tag">Tinjau Detail &rarr;</span>
+                        </a>
+                    @else
+                        <p style="font-size: 13px; color: var(--muted); margin: 6px 0;">Tidak ada pengajuan Contributor yang menunggu persetujuan saat ini.</p>
+                    @endif
                 </div>
             </div>
         </div>
     </div>
+
+    <script>
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                window.location.reload();
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script>
+        (function () {
+            const seriesPayload = @json($contentSeries);
+            const distPayload = @json($contentDistribution);
+
+            const lineCanvas = document.getElementById('contentLineChart');
+            if (lineCanvas && typeof Chart !== 'undefined') {
+                new Chart(lineCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: seriesPayload.labels,
+                        datasets: [
+                            {
+                                label: 'Resep',
+                                data: seriesPayload.recipes,
+                                borderColor: '#c05a2b',
+                                backgroundColor: 'rgba(192, 90, 43, 0.14)',
+                                fill: true,
+                                tension: 0.35,
+                                borderWidth: 2.2
+                            },
+                            {
+                                label: 'Makanan',
+                                data: seriesPayload.foods,
+                                borderColor: '#717542',
+                                backgroundColor: 'rgba(113, 117, 66, 0.14)',
+                                fill: true,
+                                tension: 0.35,
+                                borderWidth: 2.2
+                            },
+                            {
+                                label: 'Pengunjung',
+                                data: seriesPayload.visitors,
+                                borderColor: '#d4952a',
+                                backgroundColor: 'rgba(212, 149, 42, 0.12)',
+                                fill: true,
+                                tension: 0.35,
+                                borderWidth: 2.2
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: { boxWidth: 12, padding: 14 }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { precision: 0 }
+                            }
+                        }
+                    }
+                });
+            }
+
+            const distCanvas = document.getElementById('contentDoughnutChart');
+            if (distCanvas && typeof Chart !== 'undefined') {
+                new Chart(distCanvas, {
+                    type: 'doughnut',
+                    data: {
+                        labels: distPayload.labels,
+                        datasets: [{
+                            data: distPayload.data,
+                            backgroundColor: ['#c05a2b', '#717542', '#d4952a', '#4c2d1f'],
+                            borderWidth: 2,
+                            borderColor: '#ffffff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { boxWidth: 12, padding: 14 }
+                            }
+                        }
+                    }
+                });
+            }
+        })();
+    </script>
     <script src="{{ asset('Assets/js/animations.js') }}" defer></script>
 </body>
 

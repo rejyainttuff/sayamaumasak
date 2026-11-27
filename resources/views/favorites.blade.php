@@ -3,7 +3,7 @@
 @section('title', 'Resep Favorit — Bali Culinary')
 
 @section('content')
-    <header class="bali-hero hero-explore">
+    <header class="bali-hero hero-dashboard">
         <div class="bali-hero-inner">
             <div class="bali-hero-content">
                 <h1>Resep <span class="accent">Favorit</span></h1>
