@@ -10,6 +10,7 @@ use App\Models\Recipe;
 use App\Models\Review;
 use App\Models\SiteVisit;
 use App\Models\User;
+use App\Models\Ingredient;
 use App\Services\ContributorLevelService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
@@ -20,6 +21,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class PageController extends Controller
@@ -205,41 +207,76 @@ class PageController extends Controller
             fn (string $line): bool => $line !== ''
         ));
 
-        $baseSlug = strtolower(trim((string) preg_replace('/[^a-zA-Z0-9]+/', '-', $validated['name']), '-'));
+        $cookTimeMinutes = (int) preg_replace('/\D+/', '', $validated['cook_time']);
+        $cookTimeMinutes = $cookTimeMinutes > 0 ? $cookTimeMinutes : null;
+
+        $servings = $validated['servings']
+            ? (int) preg_replace('/\D+/', '', $validated['servings'])
+            : 4;
+        $servings = $servings > 0 ? $servings : 4;
+
+        $baseSlug = Str::slug($validated['name']);
         $slug = ($baseSlug !== '' ? $baseSlug : 'resep').'-'.strtolower(Str::random(4));
 
-        $newRecipe = [
-            'id' => time(),
-            'slug' => $slug,
-            'name' => $validated['name'],
-            'region' => $validated['region'],
-            'category' => $validated['category'],
-            'difficulty' => $validated['difficulty'],
-            'cook_time' => $validated['cook_time'],
-            'servings' => $validated['servings'] ?: '4 porsi',
-            'rating' => 5.0,
-            'reviews_count' => 1,
-            'is_popular' => false,
-            'status' => 'pending',
-            'author' => Auth::user()?->name ?? 'Acakadut',
-            'submitted_at' => 'Baru saja',
-            'description' => $validated['description'],
-            'history' => $validated['description'],
-            'ingredient_groups' => [
-                'Bahan Utama' => $ingredients,
-            ],
-            'ingredients' => $ingredients,
-            'steps' => $steps,
-            'notes' => 'Resep ini dibagikan oleh komunitas pecinta kuliner Bali di Bali Culinary.',
-            'image' => 'Assets/images/custom-recipe.jpg',
-        ];
+        $user = $request->user();
+        $approvalStatus = ($user && method_exists($user, 'isAdmin') && $user->isAdmin())
+            ? 'approved'
+            : 'pending';
 
-        $customRecipes = $request->session()->get('custom_recipes', []);
-        array_unshift($customRecipes, $newRecipe);
-        $request->session()->put('custom_recipes', $customRecipes);
+        DB::transaction(function () use (
+            $validated,
+            $slug,
+            $user,
+            $approvalStatus,
+            $cookTimeMinutes,
+            $servings,
+            $ingredients,
+            $steps
+        ) {
+            $category = Category::firstOrCreate(['name' => trim($validated['category'])]);
+
+            $food = Food::firstOrCreate(
+                ['name' => trim($validated['name'])],
+                [
+                    'slug' => $slug,
+                    'category_id' => $category->id,
+                    'origin_area' => trim($validated['region']),
+                    'short_description' => $validated['description'],
+                ]
+            );
+
+            $recipe = Recipe::create([
+                'user_id' => $user?->id,
+                'food_id' => $food->id,
+                'title' => trim($validated['name']),
+                'prep_time_minutes' => 0,
+                'cook_time_minutes' => $cookTimeMinutes,
+                'servings' => $servings,
+                'difficulty' => strtolower($validated['difficulty']),
+                'video_url' => $validated['video_url'] ?? null,
+                'approval_status' => $approvalStatus,
+            ]);
+
+            foreach ($ingredients as $line) {
+                $ingredient = Ingredient::firstOrCreate(['name' => $line]);
+                $recipe->recipeIngredients()->create([
+                    'ingredient_id' => $ingredient->id,
+                    'amount' => null,
+                    'unit' => null,
+                    'notes' => null,
+                ]);
+            }
+
+            foreach ($steps as $index => $instruction) {
+                $recipe->recipeSteps()->create([
+                    'step_number' => $index + 1,
+                    'instruction' => $instruction,
+                ]);
+            }
+        });
 
         return redirect()
-            ->route('food.detail', $slug)
+            ->route('recipes.index')
             ->with('success', 'Resep "'.$validated['name'].'" berhasil dikirim dan menunggu persetujuan admin!');
     }
 
@@ -1198,24 +1235,51 @@ class PageController extends Controller
                 $dbFoods = Food::with([
                     'category',
                     'recipes' => function ($query) {
-                        $query->where('approval_status', 'approved')
-                            ->with(['recipeIngredients.ingredient', 'recipeSteps'])
+                        $query->with(['recipeIngredients.ingredient', 'recipeSteps'])
                             ->latest();
                     },
                     'culinaryStories',
                 ])->latest()->get();
 
-                if ($dbFoods->isNotEmpty()) {
-                    return $dbFoods->map(function (Food $food, int $index): array {
-                        /** @var Recipe|null $approvedRecipe */
-                        $approvedRecipe = $food->recipes->first();
+                $hasFoodApprovalColumn = Schema::hasColumn('foods', 'approval_status');
+
+                $visibleFoods = $dbFoods->reject(function (Food $food) use ($hasFoodApprovalColumn): bool {
+                    if ($hasFoodApprovalColumn && $food->approval_status === 'rejected') {
+                        return true;
+                    }
+
+                    $hasApprovedRecipe = $food->recipes->contains(
+                        fn ($recipe): bool => $recipe->approval_status === 'approved'
+                    );
+
+                    $hasRejectedRecipe = $food->recipes->contains(
+                        fn ($recipe): bool => $recipe->approval_status === 'rejected'
+                    );
+
+                    // Sembunyikan jika ada resep yang di-reject dan belum ada resep yang di-approve
+                    if ($hasRejectedRecipe && ! $hasApprovedRecipe) {
+                        return true;
+                    }
+
+                    // Sembunyikan jika food dibuat oleh user namun belum ada resep yang di-approve
+                    if (! empty($food->user_id) && ! $hasApprovedRecipe) {
+                        return true;
+                    }
+
+                    return false;
+                })->values();
+
+                if ($visibleFoods->isNotEmpty()) {
+                    return $visibleFoods->map(function (Food $food, int $index): array {
+                        /** @var \App\Models\Recipe|null $approvedRecipe */
+                        $approvedRecipe = $food->recipes->firstWhere('approval_status', 'approved');
                         $story = $food->culinaryStories->first();
 
                         $ingredients = [];
                         if ($approvedRecipe) {
                             $ingredients = $approvedRecipe->recipeIngredients
                                 ->map(function ($item): string {
-                                    $name = $item->ingredient?->name ?? 'Bahan';
+                                    $name = trim((string) ($item->ingredient?->name ?? 'Bahan'));
                                     $amount = trim((string) ($item->amount ?? ''));
                                     $unit = trim((string) ($item->unit ?? ''));
                                     $qty = trim($amount.' '.$unit);
@@ -1239,8 +1303,7 @@ class PageController extends Controller
 
                         $cookMinutes = $approvedRecipe?->cook_time_minutes ?? $approvedRecipe?->prep_time_minutes;
                         $cookTime = $cookMinutes ? $cookMinutes.' menit' : '30 menit';
-
-                        $rawDifficulty = strtolower(trim((string) ($approvedRecipe?->difficulty ?? '')));
+                        $rawDifficulty = strtolower((string) ($approvedRecipe?->difficulty ?? ''));
                         $difficulty = match ($rawDifficulty) {
                             'easy', 'mudah' => 'Mudah',
                             'hard', 'sulit' => 'Sulit',
@@ -1248,38 +1311,36 @@ class PageController extends Controller
                             default => 'Sedang',
                         };
 
-                        $storyText = $story ? trim(strip_tags((string) $story->content)) : '';
-                        $fallbackDesc = $storyText !== ''
-                            ? (strlen($storyText) > 160 ? substr($storyText, 0, 157).'...' : $storyText)
-                            : 'Kuliner khas Bali di Bali Culinary.';
-                        $description = (string) ($food->short_description ?: $fallbackDesc);
-                        $history = $storyText !== '' ? $storyText : $description;
-                        $image = (string) ($food->thumbnail ?: ($story?->thumbnail ?? 'Assets/images/lawar.jpg'));
+                        $storyText = trim(strip_tags((string) ($story?->content ?? '')));
+                        $shortHistory = $storyText !== ''
+                            ? (mb_strlen($storyText) > 140 ? mb_substr($storyText, 0, 137).'...' : $storyText)
+                            : 'Kuliner khas Bali dengan cita rasa autentik.';
+                        $description = trim((string) ($food->short_description ?? ''));
+                        $history = $description !== '' ? $description : $shortHistory;
 
                         return [
                             'id' => $food->id,
                             'slug' => $food->slug,
                             'name' => $food->name,
                             'region' => (string) ($food->origin_area ?: 'Bali'),
-                            'category' => (string) ($food->category?->name ?? 'Makanan'),
+                            'category' => (string) ($food->category?->name ?? 'Kuliner'),
                             'difficulty' => $difficulty,
                             'cook_time' => $cookTime,
-                            'servings' => ($approvedRecipe?->servings ? $approvedRecipe->servings.' porsi' : '4 porsi'),
-                            'rating' => 4.8,
-                            'reviews_count' => max(1, $food->recipes->count()),
-                            'is_popular' => $index < 4,
+                            'servings' => $approvedRecipe?->servings ? $approvedRecipe->servings.' porsi' : '4 porsi',
+                            'rating' => round((float) ($food->reviews_avg_rating ?? 4.8), 1),
+                            'reviews_count' => max(1, (int) $food->reviews_count),
+                            'is_popular' => $index < 3,
                             'description' => $description,
                             'history' => $history,
-                            'ingredient_groups' => ['Bahan Utama' => $ingredients !== [] ? $ingredients : ['Bumbu base genep khas Bali']],
-                            'ingredients' => $ingredients !== [] ? $ingredients : ['Bumbu base genep khas Bali'],
-                            'steps' => $steps !== [] ? $steps : ['Siapkan bahan dan bumbu base genep, lalu olah sesuai tradisi kuliner Bali.'],
-                            'notes' => 'Disajikan melalui data kuliner dan resep yang telah disetujui di Bali Culinary.',
-                            'image' => $image,
+                            'ingredient_groups' => $ingredients !== [] ? ['Bahan Utama' => $ingredients] : ['Bahan Utama' => ['Bumbu khas Bali']],
+                            'ingredients' => $ingredients !== [] ? $ingredients : ['Bumbu khas Bali'],
+                            'steps' => $steps !== [] ? $steps : ['Siapkan bahan dan bumbu khas Bali, lalu olah sesuai tradisi kuliner Bali.'],
+                            'notes' => 'Kuliner pilihan dari daftar kuliner dan resep yang telah disetujui di Bali Culinary.',
+                            'image' => (string) ($food->thumbnail ?: ($story?->thumbnail ?: 'Assets/images/lawar.jpg')),
                         ];
                     })->all();
                 }
             } catch (Throwable) {
-                // Fallback to curated Balinese culinary dataset below.
             }
         }
 

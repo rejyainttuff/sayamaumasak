@@ -90,5 +90,4 @@ Route::middleware('auth')->group(function () {
     Route::get('/my-submissions', [PageController::class, 'mySubmissions'])->name('submissions.index');
 });
 
-// Public Culinary Story Detail (placed after /stories/create to avoid route collision)
 Route::get('/stories/{slug}', [CulinaryStoryController::class, 'show'])->name('stories.show');

@@ -30,7 +30,7 @@ class AuthController extends Controller
             }
 
             if (in_array($role, ['helper', 'contributor'], true)) {
-                return redirect()->intended('/recipes');
+                return redirect()->intended('/');
             }
 
             return redirect()->intended('/');
