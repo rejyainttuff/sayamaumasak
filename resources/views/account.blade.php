@@ -7,7 +7,10 @@
     {{-- Simplified Account Search Navigation ("Cari Apapun") --}}
     <header class="account-search-topbar">
         <div class="recipe-container account-search-topbar-inner">
-            <a href="{{ route('home') }}" class="bali-brand">Bali <span>Culinary</span></a>
+            <a href="{{ route('home') }}" class="bali-brand brand-with-logo">
+                <img src="{{ asset('Assets/images/baliculinarylogo.png') }}" alt="Bali Culinary" class="brand-logo-img">
+                <span>Bali <em style="font-style: normal; color: var(--terracotta);">Culinary</em></span>
+            </a>
 
             <form action="{{ route('explore') }}" method="GET" class="account-global-search">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color: var(--muted); flex-shrink: 0;">
@@ -31,10 +34,31 @@
                 <div class="alert-banner success">{{ session('success') }}</div>
             @endif
 
+            {{-- Floating Bottom-Left Capsule Trigger (Logo + 3 Dots) for Mobile Account Sidebar --}}
+            <div class="mobile-dash-capsule-bar mobile-account-fab-wrap">
+                <button type="button" class="mobile-dash-capsule-btn mobile-account-fab-btn" data-drawer-open="account-mobile-sidebar" aria-expanded="false" aria-label="Buka menu akun">
+                    <img src="{{ asset('Assets/images/baliculinarylogo.png') }}" alt="Bali Culinary" class="capsule-mini-logo">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <circle cx="12" cy="5" r="2.2" />
+                        <circle cx="12" cy="12" r="2.2" />
+                        <circle cx="12" cy="19" r="2.2" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="mobile-drawer-backdrop" data-drawer-backdrop="account-mobile-sidebar"></div>
+
             <div class="account-shell">
-                <aside class="account-sidebar">
-                    <h2>My Account</h2>
-                    <p class="account-sidebar-sub">Kelola profil &amp; aktivitas kulinermu</p>
+                <aside class="account-sidebar" id="account-mobile-sidebar" data-mobile-drawer>
+                    <div class="account-sidebar-banner">
+                        <img src="{{ asset('Assets/images/banner-dashboard.png') }}" alt="Bali Culinary Dashboard" class="account-sidebar-banner-img">
+                        <div class="account-sidebar-banner-overlay"></div>
+                        <button type="button" class="mobile-drawer-close account-banner-close" data-drawer-close="account-mobile-sidebar" aria-label="Tutup menu">&times;</button>
+                        <div class="account-sidebar-banner-text">
+                            <h2>My Account</h2>
+                            <p>Kelola profil &amp; aktivitas kulinermu</p>
+                        </div>
+                    </div>
 
                     <nav class="account-menu" aria-label="Navigasi Akun">
                         <a href="#profile" class="active">My Profile</a>
@@ -48,6 +72,10 @@
                         @endif
                         <a href="{{ route('account.edit') }}">Edit Profile</a>
                         <a href="{{ route('password.change') }}">Ganti Password</a>
+                        @if (auth()->user()->isHelper())
+                            <a href="{{ route('admin.recipes.approvals') }}">Persetujuan Resep</a>
+                            <a href="{{ route('admin.stories.index') }}">Story Management</a>
+                        @endif
                         @if (auth()->user()->isAdmin())
                             <a href="{{ route('admin.dashboard') }}">Admin Dashboard</a>
                         @endif

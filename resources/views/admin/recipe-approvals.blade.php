@@ -80,10 +80,18 @@
                                         </form>
                                     @endif
                                     @if (! $recipe->isRejected())
-                                        <form action="{{ route('recipes.reject', $recipe) }}" method="POST">
+                                        <form action="{{ route('recipes.reject', $recipe) }}" method="POST" style="display: inline-flex; gap: 4px; align-items: center;">
                                             @csrf
                                             @method('PATCH')
+                                            <input type="text" name="rejection_reason" placeholder="Alasan tolak..." class="form-control" style="height: 32px; width: 150px; font-size: 12px;">
                                             <button type="submit" class="action-btn reject">Reject</button>
+                                        </form>
+                                    @endif
+                                    @if (auth()->user()?->isAdmin() || (int) $recipe->user_id === (int) auth()->id())
+                                        <form action="{{ route('recipes.destroy', $recipe) }}" method="POST" onsubmit="return confirm('Yakin ingin menghapus pengajuan resep ini secara permanen?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="action-btn reject">Hapus</button>
                                         </form>
                                     @endif
                                 </div>

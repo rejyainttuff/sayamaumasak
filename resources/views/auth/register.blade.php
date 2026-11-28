@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Buat Akun — Bali Culinary</title>
+    <link rel="icon" type="image/png" href="{{ asset('Assets/images/baliculinarylogo.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -17,7 +18,10 @@
         <img src="{{ asset('Assets/images/decor-hibiscus.png') }}" alt="" class="corner-hibiscus bottom-right" aria-hidden="true">
 
         <div class="auth-top-brand">
-            <a href="{{ route('home') }}" class="bali-brand">Bali <span>Culinary</span></a>
+            <a href="{{ route('home') }}" class="bali-brand brand-with-logo">
+                <img src="{{ asset('Assets/images/baliculinarylogo.png') }}" alt="Bali Culinary" class="brand-logo-img auth-logo-img">
+                <span>Bali <em style="font-style: normal; color: var(--terracotta);">Culinary</em></span>
+            </a>
         </div>
 
         <div class="auth-card">

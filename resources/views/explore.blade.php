@@ -1,13 +1,14 @@
 @extends('layouts.app')
 
-@section('title', 'Resep Kuliner Bali — Bali Culinary')
+@section('title', 'Jelajahi Resep Kuliner Bali — Bali Culinary')
 
 @section('content')
     <header class="bali-hero hero-explore">
         <div class="bali-hero-inner">
             <div class="bali-hero-content">
-                <h1>Dari Rasa<br>Ke <span class="accent">Hati</span></h1>
-                <p>Temukan aneka resep masakan, minuman tradisional, dan jajanan pasar khas Bali berdasarkan kategori, asal daerah, dan tingkat kesulitan.</p>
+                <span class="editorial-kicker">Katalog Resep Autentik</span>
+                <h1>Jelajahi Resep<br><span class="accent">Kuliner Bali</span></h1>
+                <p>Temukan aneka masakan, minuman tradisional, dan jajanan pasar khas Bali berdasarkan kategori, asal daerah, dan tingkat kesulitan.</p>
             </div>
         </div>
     </header>
@@ -24,7 +25,7 @@
                         type="text"
                         name="search"
                         value="{{ $search }}"
-                        placeholder="Cari resep..."
+                        placeholder="Cari nama resep atau bahan..."
                         aria-label="Cari resep Bali"
                     >
                 </div>
@@ -40,6 +41,26 @@
                 </div>
 
                 <div class="toolbar-filter">
+                    <label for="filter-region">Asal Daerah</label>
+                    <select id="filter-region" name="region" onchange="this.form.submit()">
+                        <option value="">Semua</option>
+                        @foreach ($regions as $region)
+                            <option value="{{ $region }}" @selected($selectedRegion === $region)>{{ $region }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="toolbar-filter">
+                    <label for="filter-difficulty">Kesulitan</label>
+                    <select id="filter-difficulty" name="difficulty" onchange="this.form.submit()">
+                        <option value="">Semua</option>
+                        @foreach ($difficulties as $difficulty)
+                            <option value="{{ $difficulty }}" @selected($selectedDifficulty === $difficulty)>{{ $difficulty }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="toolbar-filter">
                     <label for="filter-sort">Urutkan</label>
                     <select id="filter-sort" name="sort" onchange="this.form.submit()">
                         <option value="default" @selected(($sort ?? 'default') === 'default')>Default</option>
@@ -49,91 +70,93 @@
                         <option value="popular" @selected(($sort ?? '') === 'popular')>Terpopuler</option>
                     </select>
                 </div>
-                <div class="toolbar-filter">
-                    <label for="filter-difficulty">Tingkat Kesulitan</label>
-                    <select id="filter-difficulty" name="difficulty" onchange="this.form.submit()">
-                        <option value="">Semua</option>
-                        @foreach ($difficulties as $difficulty)
-                            <option value="{{ $difficulty }}" @selected($selectedDifficulty === $difficulty)>{{ $difficulty }}</option>
-                        @endforeach
-                    </select>
-                </div>
 
-                <a href="{{ route('recipe.create') }}" class="btn-terracotta rect" style="height: 40px;">+ Tambah Resep</a>
-
+                <button type="submit" class="btn-terracotta sm">Terapkan</button>
                 @if ($search !== '' || $selectedCategory !== '' || $selectedRegion !== '' || $selectedDifficulty !== '' || ($sort ?? 'default') !== 'default')
-                    <a href="{{ route('explore') }}" class="btn-white" style="height: 40px;">Reset</a>
+                    <a href="{{ route('explore') }}" class="pill-tag">Reset</a>
                 @endif
             </form>
 
-            <div class="recipe-layout">
-                <div>
-                    @if (count($foods) > 0)
-                        <div class="recipe-grid">
-                            @foreach ($foods as $food)
-                                @include('partials.recipe-card', ['food' => $food])
-                            @endforeach
+            @if (count($foods) > 0)
+                @php
+                    $isFirstPageNoFilter = $currentPage === 1 && $search === '' && $selectedCategory === '' && $selectedRegion === '' && $selectedDifficulty === '';
+                    $featuredExplore = $isFirstPageNoFilter ? $foods[0] : null;
+                    $gridFoods = $isFirstPageNoFilter ? array_slice($foods, 1) : $foods;
+                @endphp
+
+                {{-- Editorial Featured Highlight on Page 1 --}}
+                @if ($featuredExplore)
+                    <div class="explore-featured-banner" data-reveal>
+                        <div class="explore-featured-media">
+                            @if (file_exists(public_path(ltrim($featuredExplore['image'], '/'))))
+                                <img src="{{ asset(ltrim($featuredExplore['image'], '/')) }}" alt="{{ $featuredExplore['name'] }}">
+                            @else
+                                <div class="editorial-media-fallback">{{ $featuredExplore['name'] }}</div>
+                            @endif
                         </div>
-
-                        <nav class="recipe-pagination" aria-label="Navigasi halaman">
-                            <a
-                                href="{{ route('explore', array_filter(['search' => $search, 'category' => $selectedCategory, 'region' => $selectedRegion, 'difficulty' => $selectedDifficulty, 'page' => max(1, $currentPage - 1)])) }}"
-                                class="page-dot {{ $currentPage <= 1 ? 'disabled' : '' }}"
-                                aria-label="Halaman sebelumnya"
-                            >&lsaquo;</a>
-
-                            @for ($p = 1; $p <= $totalPages; $p++)
-                                <a
-                                    href="{{ route('explore', array_filter(['search' => $search, 'category' => $selectedCategory, 'region' => $selectedRegion, 'difficulty' => $selectedDifficulty, 'page' => $p])) }}"
-                                    class="page-dot {{ $currentPage === $p ? 'active' : '' }}"
-                                >{{ $p }}</a>
-                            @endfor
-
-                            <a
-                                href="{{ route('explore', array_filter(['search' => $search, 'category' => $selectedCategory, 'region' => $selectedRegion, 'difficulty' => $selectedDifficulty, 'page' => min($totalPages, $currentPage + 1)])) }}"
-                                class="page-dot {{ $currentPage >= $totalPages ? 'disabled' : '' }}"
-                                aria-label="Halaman berikutnya"
-                            >&rsaquo;</a>
-                        </nav>
-                    @else
-                        <div class="recipe-empty">
-                            <h3 style="font-family: 'Playfair Display', serif; color: var(--terracotta); margin: 0 0 8px;">Resep tidak ditemukan</h3>
-                            <p style="font-size: 13px; color: var(--muted); margin: 0 0 16px;">Coba ubah kata kunci atau pilih kategori/daerah lainnya.</p>
-                            <a href="{{ route('explore') }}" class="btn-terracotta">Tampilkan Semua Resep</a>
+                        <div class="explore-featured-body">
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                                <span class="pill-tag">{{ $featuredExplore['category'] }}</span>
+                                <span style="font-size: 12px; color: var(--muted);">{{ $featuredExplore['region'] }} &middot; {{ $featuredExplore['cook_time'] }} &middot; {{ $featuredExplore['difficulty'] }}</span>
+                            </div>
+                            <h2>{{ $featuredExplore['name'] }}</h2>
+                            <p>{{ $featuredExplore['description'] }}</p>
+                            <a href="{{ route('food.detail', $featuredExplore['slug']) }}" class="btn-terracotta sm">Lihat Detail Resep &rarr;</a>
                         </div>
-                    @endif
+                    </div>
+                @endif
+
+                {{-- Editorial Recipe Cards Grid --}}
+                <div class="explore-editorial-grid">
+                    @foreach ($gridFoods as $food)
+                        <article class="explore-recipe-item" data-reveal>
+                            <div class="explore-item-media">
+                                @if (file_exists(public_path(ltrim($food['image'], '/'))))
+                                    <img src="{{ asset(ltrim($food['image'], '/')) }}" alt="{{ $food['name'] }}" loading="lazy">
+                                @else
+                                    <span class="recipe-card-placeholder">{{ $food['name'] }}</span>
+                                @endif
+                                <span class="explore-item-region">{{ $food['region'] }}</span>
+                            </div>
+                            <div class="explore-item-body">
+                                <div class="explore-item-meta">
+                                    <span>{{ $food['category'] }}</span>
+                                    <span>&#9201; {{ $food['cook_time'] }}</span>
+                                    <span>{{ $food['difficulty'] }}</span>
+                                </div>
+                                <h3>
+                                    <a href="{{ route('food.detail', $food['slug']) }}">{{ $food['name'] }}</a>
+                                </h3>
+                                <p>{{ Str::limit($food['description'], 105) }}</p>
+                                <div class="explore-item-footer">
+                                    <span class="recipe-rating">
+                                        <span class="star">&#9733;</span>
+                                        <span>{{ number_format((float) $food['rating'], 1) }}</span>
+                                    </span>
+                                    <a href="{{ route('food.detail', $food['slug']) }}" class="editorial-read-link">Lihat Detail &rarr;</a>
+                                </div>
+                            </div>
+                        </article>
+                    @endforeach
                 </div>
 
-                <aside class="popular-sidebar">
-                    <div class="popular-sidebar-header">
-                        <span class="starburst-icon" aria-hidden="true">&#9733;</span>
-                        <h3>Resep Populer</h3>
-                    </div>
-                    <div class="popular-sidebar-list">
-                        @foreach ($popularFoods as $index => $popular)
-                            <a href="{{ route('food.detail', $popular['slug']) }}" class="popular-sidebar-item">
-                                <span class="rank-circle">{{ $index + 1 }}</span>
-                                <div class="popular-side-thumb">
-                                    @if (file_exists(public_path($popular['image'])))
-                                        <img src="{{ asset($popular['image']) }}" alt="{{ $popular['name'] }}">
-                                    @else
-                                        <span>{{ substr($popular['name'], 0, 12) }}</span>
-                                    @endif
-                                </div>
-                                <div class="popular-side-info">
-                                    <h4>{{ $popular['name'] }}</h4>
-                                    <div class="popular-side-meta">
-                                        <span><strong style="color: var(--star);">&#9733;</strong> {{ number_format($popular['rating'], 1) }}</span>
-                                        <span>{{ $popular['cook_time'] }}</span>
-                                    </div>
-                                </div>
-                            </a>
-                        @endforeach
-                    </div>
-                </aside>
-            </div>
+                @if ($totalPages > 1)
+                    <nav class="recipe-pagination" aria-label="Halaman resep" style="margin-top: 28px;">
+                        @for ($p = 1; $p <= $totalPages; $p++)
+                            <a
+                                href="{{ route('explore', array_merge(request()->query(), ['page' => $p])) }}"
+                                class="page-btn {{ $p === $currentPage ? 'active' : '' }}"
+                            >{{ $p }}</a>
+                        @endfor
+                    </nav>
+                @endif
+            @else
+                <div class="recipe-empty" style="margin-top: 24px;">
+                    <h3 style="font-family: 'Playfair Display', serif; color: var(--terracotta); margin: 0 0 8px;">Resep tidak ditemukan</h3>
+                    <p style="font-size: 13.5px; color: var(--muted); margin: 0 0 16px;">Coba ubah kata kunci pencarian atau filter kategori, asal daerah, maupun tingkat kesulitan.</p>
+                    <a href="{{ route('explore') }}" class="btn-terracotta sm">Tampilkan Semua Resep</a>
+                </div>
+            @endif
         </div>
-
-        <img src="{{ asset('Assets/images/decor-hibiscus.png') }}" alt="" class="corner-hibiscus bottom-right" aria-hidden="true">
     </section>
 @endsection

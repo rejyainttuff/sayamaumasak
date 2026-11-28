@@ -6,7 +6,9 @@ use App\Models\Food;
 use App\Models\Ingredient;
 use App\Models\Recipe;
 use App\Models\RecipeStep;
+use App\Models\User;
 use App\Services\ContributorLevelService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -141,8 +143,11 @@ class RecipeController extends Controller
         return redirect()->route('recipes.index')->with('success', $message);
     }
 
-    public function edit(Recipe $recipe)
+    public function edit(Request $request, Recipe $recipe)
     {
+        $user = $request->user();
+        $this->authorizeRecipeEdit($user, $recipe);
+
         $recipe->load([
             'food',
             'recipeIngredients.ingredient',
@@ -157,6 +162,9 @@ class RecipeController extends Controller
 
     public function update(Request $request, Recipe $recipe)
     {
+        $user = $request->user();
+        $this->authorizeRecipeEdit($user, $recipe);
+
         $rules = [
             'food_id' => ['required', 'exists:foods,id'],
             'title' => ['required', 'string', 'max:255'],
@@ -177,12 +185,11 @@ class RecipeController extends Controller
             'steps.*.step_number' => ['nullable', 'integer', 'min:1'],
             'steps.*.instruction' => ['required_with:steps', 'string'],
             'steps.*.image' => ['nullable', 'image', 'max:2048'],
+            'submission_action' => ['nullable', 'in:save_draft,submit,resubmit'],
         ];
 
-        $user = $request->user();
-
         if ($user && $user->isAdmin()) {
-            $rules['approval_status'] = ['nullable', 'in:pending,approved,rejected'];
+            $rules['approval_status'] = ['nullable', 'in:draft,pending,approved,rejected'];
         }
         $rules['video_url'] = ['nullable', 'string', 'max:500'];
         $rules['food_thumbnail'] = ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'];
@@ -197,12 +204,25 @@ class RecipeController extends Controller
             'servings' => $validated['servings'],
             'difficulty' => $validated['difficulty'],
             'video_url' => array_key_exists('video_url', $validated) ? $validated['video_url'] : $recipe->video_url,
+            'revision_count' => (int) ($recipe->revision_count ?? 0) + 1,
+            'last_revised_at' => now(),
         ];
 
-        if ($user && $user->isHelper() && ! $user->isAdmin()) {
-            $recipeData['approval_status'] = 'pending';
-        } elseif ($user && $user->isAdmin() && ! empty($validated['approval_status'])) {
+        $action = $validated['submission_action'] ?? null;
+
+        if ($user && $user->isAdmin() && ! empty($validated['approval_status'])) {
             $recipeData['approval_status'] = $validated['approval_status'];
+            if ($validated['approval_status'] !== 'rejected') {
+                $recipeData['rejection_reason'] = null;
+            }
+        } elseif ($action === 'save_draft' && in_array($recipe->approval_status, ['draft', 'rejected'], true)) {
+            $recipeData['approval_status'] = 'draft';
+        } elseif (in_array($action, ['submit', 'resubmit'], true)) {
+            $recipeData['approval_status'] = ($user && $user->isAdmin()) ? 'approved' : 'pending';
+            $recipeData['rejection_reason'] = null;
+        } elseif ($recipe->isApproved() && $user && ! $user->isAdmin()) {
+            // Published recipes revised by non-admin require re-review
+            $recipeData['approval_status'] = 'pending';
         }
 
         DB::transaction(function () use ($request, $recipe, $recipeData, $validated): void {
@@ -227,16 +247,23 @@ class RecipeController extends Controller
             $this->levelService->grantRecipeApprovalBonus($recipe);
         }
 
-        if ($user && $user->isAdmin()) {
+        if ($user && ($user->isAdmin() || $user->isHelper())) {
             return redirect()->route('admin.recipes.approvals')->with('success', 'Resep berhasil diperbarui.');
         }
 
-        return redirect()->route('recipes.index')->with('success', 'Resep berhasil diperbarui.');
+        $msg = $recipe->isDraft()
+            ? 'Draft resep berhasil disimpan.'
+            : 'Revisi resep berhasil disimpan dan dikirim untuk peninjauan.';
+
+        return redirect()->route('submissions.index')->with('success', $msg);
     }
 
     public function approve(Recipe $recipe)
     {
-        $recipe->update(['approval_status' => 'approved']);
+        $recipe->update([
+            'approval_status' => 'approved',
+            'rejection_reason' => null,
+        ]);
         $bonusGranted = $this->levelService->grantRecipeApprovalBonus($recipe);
 
         $message = $bonusGranted
@@ -246,11 +273,55 @@ class RecipeController extends Controller
         return back()->with('success', $message);
     }
 
-    public function reject(Recipe $recipe)
+    public function reject(Request $request, Recipe $recipe)
     {
-        $recipe->update(['approval_status' => 'rejected']);
+        $validated = $request->validate([
+            'rejection_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
 
-        return back()->with('success', 'Resep ditolak.');
+        $recipe->update([
+            'approval_status' => 'rejected',
+            'rejection_reason' => $validated['rejection_reason'] ?? 'Perlu perbaikan informasi, bahan, atau langkah memasak.',
+        ]);
+
+        return back()->with('success', 'Resep ditolak beserta alasan penolakan.');
+    }
+
+    public function destroy(Request $request, Recipe $recipe): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user || (! $user->isAdmin() && (int) $recipe->user_id !== (int) $user->id)) {
+            abort(403, 'Anda hanya dapat menghapus pengajuan resep milik Anda sendiri.');
+        }
+
+        $title = $recipe->title;
+
+        DB::transaction(function () use ($recipe) {
+            $recipe->recipeIngredients()->delete();
+            $recipe->recipeSteps()->delete();
+            $recipe->delete();
+        });
+
+        return back()->with('success', 'Pengajuan resep "'.$title.'" berhasil dihapus.');
+    }
+
+    private function authorizeRecipeEdit(?User $user, Recipe $recipe): void
+    {
+        if (! $user) {
+            abort(403, 'Anda harus login untuk mengedit resep.');
+        }
+
+        if ($user->isAdmin() || $user->isHelper()) {
+            return;
+        }
+
+        if ($recipe->user_id !== $user->id) {
+            abort(403, 'Anda tidak memiliki izin untuk mengedit resep milik pengguna lain.');
+        }
+
+        if (! $user->canSubmitRecipes()) {
+            abort(403, 'Akun Anda belum memiliki izin untuk mengelola resep.');
+        }
     }
 
     private function syncIngredients(Recipe $recipe, array $ingredientsInput): void

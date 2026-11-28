@@ -17,6 +17,7 @@ use Illuminate\Notifications\Notifiable;
     'username',
     'email',
     'role',
+    'can_submit_recipes',
     'contributor_level',
     'reading_seconds',
     'approved_recipes_count',
@@ -40,6 +41,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'can_submit_recipes' => 'boolean',
         ];
     }
 
@@ -50,12 +52,17 @@ class User extends Authenticatable
 
     public function isHelper(): bool
     {
-        return in_array($this->role, ['helper', 'contributor'], true);
+        return $this->role === 'helper';
+    }
+
+    public function canSubmitRecipes(): bool
+    {
+        return $this->isAdmin() || $this->isHelper() || (bool) $this->can_submit_recipes;
     }
 
     public function isContributor(): bool
     {
-        return in_array($this->role, ['contributor', 'helper'], true);
+        return $this->canSubmitRecipes();
     }
 
     public function isUser(): bool

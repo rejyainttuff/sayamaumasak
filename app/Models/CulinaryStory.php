@@ -17,6 +17,7 @@ class CulinaryStory extends Model
         'gallery_images',
         'video_url',
         'approval_status',
+        'rejection_reason',
     ];
 
     /**

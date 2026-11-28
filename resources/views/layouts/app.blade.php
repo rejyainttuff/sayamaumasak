@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Bali Culinary — Dari Rasa Ke Hati')</title>
+    <link rel="icon" type="image/png" href="{{ asset('Assets/images/baliculinarylogo.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -14,8 +15,8 @@
 
 <body class="recipe-page @hasSection('hide_main_nav') has-account-nav @endif">
     @php
-        // Modular compact icon path for Dynamic Island scroll state (easy to swap in one place)
-        $navCompactIcon = asset('Assets/images/image-for-reciepe.png');
+        // Canonical logo asset path (replace public/Assets/images/baliculinarylogo.png to update everywhere)
+        $navCompactIcon = asset('Assets/images/baliculinarylogo.png');
     @endphp
 
     @hasSection('hide_main_nav')
@@ -28,7 +29,10 @@
                 </button>
 
                 <div class="floating-pill-content">
-                    <a href="{{ route('home') }}" class="bali-brand floating-brand">Bali <span>Culinary</span></a>
+                    <a href="{{ route('home') }}" class="bali-brand floating-brand brand-with-logo">
+                        <img src="{{ $navCompactIcon }}" alt="Bali Culinary" class="brand-logo-img">
+                        <span>Bali <em style="font-style: normal; color: var(--terracotta);">Culinary</em></span>
+                    </a>
 
                     <div class="floating-pill-links">
                         <a href="{{ route('about') }}" class="{{ request()->routeIs('about') ? 'active' : '' }}">Tentang</a>
@@ -108,7 +112,10 @@
             <div class="bali-footer-curve" aria-hidden="true"></div>
             <div class="bali-footer-inner">
                 <div>
-                    <h2 class="bali-footer-brand">Bali Culinary</h2>
+                    <a href="{{ route('home') }}" class="brand-with-logo" style="text-decoration: none; margin-bottom: 6px;">
+                        <img src="{{ $navCompactIcon }}" alt="Bali Culinary" class="brand-logo-img footer-logo-img">
+                        <h2 class="bali-footer-brand" style="margin: 0;">Bali Culinary</h2>
+                    </a>
                     <p class="bali-footer-desc">Dari Rasa Ke Hati — melestarikan kuliner tradisional Pulau Dewata.</p>
                 </div>
                 <div class="bali-footer-links">

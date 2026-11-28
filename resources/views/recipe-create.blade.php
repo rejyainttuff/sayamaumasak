@@ -152,13 +152,14 @@
                             <span>Saya menyatakan resep ini asli dan siap ditinjau oleh admin Bali Culinary.</span>
                         </label>
 
-                        <button type="submit" class="btn-terracotta rect">Kirim Resep</button>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button type="submit" name="submission_action" value="draft" class="btn-white">Simpan sebagai Draft</button>
+                            <button type="submit" name="submission_action" value="submit" class="btn-terracotta rect">Kirim Resep</button>
+                        </div>
                     </form>
                 </div>
             </div>
         </div>
-
-        <img src="{{ asset('Assets/images/decor-hibiscus.png') }}" alt="" class="corner-hibiscus bottom-right" aria-hidden="true">
     </section>
 @endsection
 

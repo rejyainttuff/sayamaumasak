@@ -3,162 +3,158 @@
 @section('title', 'Beranda — Bali Culinary Guide | Dari Rasa Ke Hati')
 
 @section('content')
-    {{-- Editorial Fixed-Visual Hero Banner --}}
+    {{-- Hero Banner inspired by beranda-referensi.png --}}
     <header class="bali-hero hero-home hero-fixed-bg">
         <div class="bali-hero-inner">
             <div class="bali-hero-content">
                 <span class="editorial-kicker">Panduan Kuliner Tradisional Pulau Dewata</span>
                 <h1>Dari Rasa<br>Ke <span class="accent">Hati</span></h1>
-                <p>Menyelami warisan bumbu <em>base genep</em>, teknik memasak turun-temurun, dan kisah hangat di balik setiap sajian tradisional Bali.</p>
+                <p>Jelajahi kekayaan kuliner Bali melalui resep autentik, sejarah dapur, dan tradisi yang hidup dari generasi ke generasi.</p>
                 <div class="bali-hero-actions">
-                    <a href="{{ route('explore') }}" class="btn-terracotta">Jelajahi Resep &rarr;</a>
-                    <a href="{{ route('stories') }}" class="pill-tag">Baca Cerita Kuliner</a>
+                    <a href="{{ route('explore') }}" class="btn-terracotta">Mulai Jelajahi &rarr;</a>
+                    <a href="{{ route('photo.of.the.day') }}" class="pill-tag">Photo of the Day</a>
                 </div>
             </div>
         </div>
     </header>
 
-    @php
-        $featuredFood = $popularFoods[0] ?? ($foods[0] ?? null);
-        $curatedFoods = array_slice($popularFoods, 1, 3);
-        if (count($curatedFoods) < 3) {
-            $curatedFoods = array_slice($foods, 1, 3);
-        }
-    @endphp
-
-    {{-- Section 1: Featured Editorial Spotlight (Asymmetric Split, Not Generic Cards) --}}
-    @if ($featuredFood)
-        <section class="editorial-spotlight-section">
-            <div class="recipe-container">
-                <div class="editorial-spotlight">
-                    <div class="editorial-spotlight-media">
-                        @if (file_exists(public_path(ltrim($featuredFood['image'], '/'))))
-                            <img src="{{ asset(ltrim($featuredFood['image'], '/')) }}" alt="{{ $featuredFood['name'] }}">
-                        @else
-                            <div class="editorial-media-fallback">{{ $featuredFood['name'] }}</div>
-                        @endif
-                        <span class="editorial-region-tag">{{ $featuredFood['region'] }}</span>
-                    </div>
-
-                    <div class="editorial-spotlight-copy">
-                        <span class="editorial-eyebrow">Sorotan Kuliner Pilihan</span>
-                        <h2>{{ $featuredFood['name'] }}</h2>
-                        <p class="editorial-lead">{{ $featuredFood['description'] }}</p>
-
-                        <div class="editorial-meta-strip">
-                            <div>
-                                <small>Kategori</small>
-                                <strong>{{ $featuredFood['category'] }}</strong>
-                            </div>
-                            <div>
-                                <small>Waktu Masak</small>
-                                <strong>{{ $featuredFood['cook_time'] }}</strong>
-                            </div>
-                            <div>
-                                <small>Tingkat</small>
-                                <strong>{{ $featuredFood['difficulty'] }}</strong>
-                            </div>
-                        </div>
-
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px;">
-                            <a href="{{ route('food.detail', $featuredFood['slug']) }}" class="btn-terracotta">Buka Panduan Lengkap &rarr;</a>
+    {{-- Dynamic Section Arrangement (Structured Editorial Variations) --}}
+    @foreach (($sectionOrder ?? ['popular', 'story_photo', 'recommended']) as $sectionKey)
+        @if ($sectionKey === 'popular')
+            <section class="home-dynamic-section">
+                <div class="recipe-container">
+                    <div class="section-heading-row" style="margin-bottom: 18px;">
+                        <span class="starburst-icon" aria-hidden="true">&#9733;</span>
+                        <div>
+                            <h2 class="section-heading" style="margin: 0;">Lagi Populer</h2>
+                            <p style="margin: 2px 0 0; font-size: 13px; color: var(--muted);">Rasakan kelezatan kuliner Bali pilihan yang berganti secara dinamis</p>
                         </div>
                     </div>
-                </div>
-            </div>
-        </section>
-    @endif
 
-    {{-- Section 2: Curated Culinary Mosaic (Asymmetric Feature + Stacked Editorial List) --}}
-    @if (count($curatedFoods) > 0)
-        <section class="editorial-collection-section">
-            <div class="recipe-container">
-                <div class="editorial-section-header">
-                    <div>
-                        <span class="editorial-eyebrow">Kurasi Dapur Bali</span>
-                        <h2 class="section-heading">Cita Rasa yang Wajib Dicoba</h2>
-                    </div>
-                    <a href="{{ route('explore') }}" class="pill-tag">Lihat Semua Koleksi &rarr;</a>
+                    @if (count($popularFoods ?? []) > 0)
+                        <div class="beranda-popular-grid">
+                            @foreach ($popularFoods as $item)
+                                <article class="beranda-popular-card">
+                                    <div class="beranda-popular-thumb">
+                                        @if (! empty($item['image']) && file_exists(public_path(ltrim($item['image'], '/'))))
+                                            <img src="{{ asset(ltrim($item['image'], '/')) }}" alt="{{ $item['name'] }}" loading="lazy">
+                                        @else
+                                            <span>{{ Str::limit($item['name'], 12, '') }}</span>
+                                        @endif
+                                    </div>
+                                    <div class="beranda-popular-info">
+                                        <h3>{{ $item['name'] }}</h3>
+                                        <p>{{ Str::limit($item['description'], 88) }}</p>
+                                        <a href="{{ route('food.detail', $item['slug']) }}" class="btn-terracotta sm">Lihat Resep</a>
+                                    </div>
+                                </article>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="recipe-empty" style="padding: 28px;">
+                            <h3>Belum ada data kuliner tersedia</h3>
+                            <p>Jelajahi halaman Resep atau kirim resep pertamamu untuk mulai mengisi panduan kuliner Bali.</p>
+                        </div>
+                    @endif
                 </div>
-
-                <div class="editorial-mosaic">
-                    @php $primaryPick = $curatedFoods[0]; @endphp
-                    <a href="{{ route('food.detail', $primaryPick['slug']) }}" class="editorial-mosaic-lead">
-                        <div class="editorial-mosaic-lead-img">
-                            @if (file_exists(public_path(ltrim($primaryPick['image'], '/'))))
-                                <img src="{{ asset(ltrim($primaryPick['image'], '/')) }}" alt="{{ $primaryPick['name'] }}">
+            </section>
+        @elseif ($sectionKey === 'story_photo')
+            <section class="home-dynamic-section">
+                <div class="recipe-container">
+                    <div class="beranda-story-photo-grid">
+                        {{-- Left: Featured Culinary Story / Sejarah --}}
+                        <div class="beranda-story-card">
+                            <span class="editorial-eyebrow">Cerita &amp; Sejarah Kuliner</span>
+                            @if ($featuredStory)
+                                <h2>{{ $featuredStory['title'] }}</h2>
+                                <p>{{ $featuredStory['excerpt'] }}</p>
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: auto;">
+                                    <span class="pill-tag">{{ $featuredStory['region'] ?? 'Bali' }}</span>
+                                    <a href="{{ route('stories.show', $featuredStory['slug']) }}" class="editorial-read-link">Lihat selengkapnya &rarr;</a>
+                                </div>
                             @else
-                                <span>{{ $primaryPick['name'] }}</span>
+                                <h2>Kisah Dapur Tradisional Bali</h2>
+                                <p>Jelajahi sejarah dan filosofi kuliner Pulau Dewata yang kaya akan rempah dan kebersamaan.</p>
+                                <a href="{{ route('stories') }}" class="editorial-read-link">Buka Cerita Kuliner &rarr;</a>
                             @endif
                         </div>
-                        <div class="editorial-mosaic-lead-body">
-                            <span class="pill-tag">{{ $primaryPick['region'] }}</span>
-                            <h3>{{ $primaryPick['name'] }}</h3>
-                            <p>{{ $primaryPick['description'] }}</p>
-                        </div>
-                    </a>
 
-                    <div class="editorial-mosaic-side">
-                        @foreach (array_slice($curatedFoods, 1, 2) as $sideFood)
-                            <a href="{{ route('food.detail', $sideFood['slug']) }}" class="editorial-side-item">
-                                <div class="editorial-side-thumb">
-                                    @if (file_exists(public_path(ltrim($sideFood['image'], '/'))))
-                                        <img src="{{ asset(ltrim($sideFood['image'], '/')) }}" alt="{{ $sideFood['name'] }}">
+                        {{-- Right: Photo of the Day Preview --}}
+                        <a href="{{ route('photo.of.the.day') }}" class="beranda-photo-card">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px;">
+                                <h2 style="margin: 0; font-family: 'Playfair Display', serif; font-size: 24px; color: var(--terracotta);">Photo of the Day</h2>
+                                <span style="font-size: 12px; color: var(--terracotta); font-weight: 600;">Galeri &rarr;</span>
+                            </div>
+
+                            @if ($photoOfTheDay)
+                                <div class="beranda-photo-frame">
+                                    <img src="{{ $photoOfTheDay['url'] }}" alt="{{ $photoOfTheDay['title'] }}" loading="lazy">
+                                </div>
+                                <div class="beranda-photo-caption">
+                                    <strong>{{ $photoOfTheDay['title'] }}</strong>
+                                    <small>oleh {{ $photoOfTheDay['author'] }} &middot; {{ $photoOfTheDay['source_type'] }}</small>
+                                </div>
+                            @else
+                                <div class="beranda-photo-empty">
+                                    <span>Belum ada foto komunitas yang disetujui hari ini.</span>
+                                    <small>Unggah foto makanan terbaikmu melalui halaman Kirim Resep atau Cerita Kuliner!</small>
+                                </div>
+                            @endif
+                        </a>
+                    </div>
+                </div>
+            </section>
+        @elseif ($sectionKey === 'recommended' && count($recommendedFoods ?? []) > 0)
+            <section class="home-dynamic-section">
+                <div class="recipe-container">
+                    <div class="editorial-section-header">
+                        <div>
+                            <span class="editorial-eyebrow">Rekomendasi Untukmu</span>
+                            <h2 class="section-heading">{{ $recommendedHeading }}</h2>
+                        </div>
+                        <a href="{{ route('explore') }}" class="pill-tag">Jelajahi Semua &rarr;</a>
+                    </div>
+
+                    <div class="explore-editorial-grid">
+                        @foreach ($recommendedFoods as $rec)
+                            <article class="explore-recipe-item">
+                                <div class="explore-item-media">
+                                    @if (! empty($rec['image']) && file_exists(public_path(ltrim($rec['image'], '/'))))
+                                        <img src="{{ asset(ltrim($rec['image'], '/')) }}" alt="{{ $rec['name'] }}" loading="lazy">
                                     @else
-                                        <span>{{ Str::limit($sideFood['name'], 12, '') }}</span>
+                                        <span class="recipe-card-placeholder">{{ $rec['name'] }}</span>
                                     @endif
+                                    <span class="explore-item-region">{{ $rec['region'] }}</span>
                                 </div>
-                                <div class="editorial-side-copy">
-                                    <span style="font-size: 11px; font-weight: 600; color: var(--terracotta); text-transform: uppercase; letter-spacing: 0.05em;">{{ $sideFood['region'] }} &middot; {{ $sideFood['cook_time'] }}</span>
-                                    <h3>{{ $sideFood['name'] }}</h3>
-                                    <p>{{ Str::limit($sideFood['description'], 110) }}</p>
+                                <div class="explore-item-body">
+                                    <div class="explore-item-meta">
+                                        <span>{{ $rec['category'] }}</span>
+                                        <span>&#9201; {{ $rec['cook_time'] }}</span>
+                                    </div>
+                                    <h3><a href="{{ route('food.detail', $rec['slug']) }}">{{ $rec['name'] }}</a></h3>
+                                    <p>{{ Str::limit($rec['description'], 95) }}</p>
+                                    <div class="explore-item-footer">
+                                        <span class="recipe-rating"><span class="star">&#9733;</span> {{ number_format((float) $rec['rating'], 1) }}</span>
+                                        <a href="{{ route('food.detail', $rec['slug']) }}" class="editorial-read-link">Lihat Resep &rarr;</a>
+                                    </div>
                                 </div>
-                            </a>
+                            </article>
                         @endforeach
                     </div>
                 </div>
-            </div>
-        </section>
-    @endif
+            </section>
+        @endif
+    @endforeach
 
-    {{-- Section 3: Visual Storytelling Strip (Culinary Stories) --}}
-    @if (count($stories) > 0)
-        <section class="editorial-stories-section">
-            <div class="recipe-container">
-                <div class="editorial-section-header">
-                    <div>
-                        <span class="editorial-eyebrow">Jejak Budaya &amp; Sejarah</span>
-                        <h2 class="section-heading">Cerita dari Dapur Bali</h2>
-                    </div>
-                    <a href="{{ route('stories') }}" class="pill-tag">Semua Cerita &rarr;</a>
-                </div>
-
-                <div class="editorial-stories-list">
-                    @foreach ($stories as $story)
-                        <a href="{{ route('stories.show', $story['slug']) }}" class="editorial-story-row">
-                            <div class="editorial-story-meta">
-                                <span class="pill-tag">{{ $story['region'] }}</span>
-                                <small>oleh {{ $story['author'] }}</small>
-                            </div>
-                            <h3>{{ $story['title'] }}</h3>
-                            <p>{{ $story['excerpt'] }}</p>
-                            <span class="editorial-read-link">Baca cerita lengkap &rarr;</span>
-                        </a>
-                    @endforeach
-                </div>
-            </div>
-        </section>
-    @endif
-
-    {{-- Section 4: Community Preservation Callout --}}
+    {{-- Bottom Preservation CTA Banner --}}
     <section class="home-section">
         <div class="recipe-container">
             <div class="home-cta-banner">
-                <h2>Mari lestarikan kuliner Bali bersama Bali Culinary Guide</h2>
+                <h2>Mari lestarikan kuliner Bali bersama Bali Culinary</h2>
                 <p>Punya resep masakan tradisional khas Bali atau cerita dapur keluarga? Bagikan sekarang atau ajukan diri menjadi Contributor agar cita rasa Pulau Dewata tetap hidup.</p>
                 <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
                     <a href="{{ route('recipe.create') }}" class="btn-terracotta sm">+ Bagikan Resep</a>
-                    <a href="{{ auth()->check() ? route('contributor.apply') : route('register') }}" class="pill-tag">Gabung Contributor</a>
+                    <a href="{{ auth()->check() ? route('contributor.apply') : route('register') }}" class="pill-tag">Ajukan Jadi Contributor</a>
                 </div>
             </div>
         </div>

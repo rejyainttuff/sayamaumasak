@@ -19,7 +19,25 @@ class Recipe extends Model
         'difficulty',
         'video_url',
         'approval_status',
+        'rejection_reason',
+        'revision_count',
+        'last_revised_at',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'last_revised_at' => 'datetime',
+        ];
+    }
+
+    public function isDraft(): bool
+    {
+        return $this->approval_status === 'draft';
+    }
 
     public function food(): BelongsTo
     {

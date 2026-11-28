@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard — Bali Culinary</title>
+    <link rel="icon" type="image/png" href="{{ asset('Assets/images/baliculinarylogo.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -156,7 +157,7 @@
                                     <span>Pengajuan Makanan</span>
                                     <strong>{{ $pendingSummary['foods'] }}</strong>
                                 </a>
-                                <a href="{{ route('stories') }}" class="pending-summary-row">
+                                <a href="{{ route('admin.stories.index', ['status' => 'pending']) }}" class="pending-summary-row">
                                     <span>Pengajuan Cerita Kuliner</span>
                                     <strong>{{ $pendingSummary['stories'] }}</strong>
                                 </a>

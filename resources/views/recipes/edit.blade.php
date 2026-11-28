@@ -17,6 +17,13 @@
 
     <section class="share-wrap">
         <div class="recipe-container">
+            @if ($recipe->isRejected() && ! empty($recipe->rejection_reason))
+                <div class="alert-banner error">
+                    <strong>Resep ini sebelumnya ditolak dengan alasan:</strong>
+                    <p style="margin: 4px 0 0;">{{ $recipe->rejection_reason }}</p>
+                </div>
+            @endif
+
             @if ($errors->any())
                 <div class="alert-banner error">
                     <strong>Mohon periksa kembali formulir resep:</strong>
@@ -115,6 +122,7 @@
                             <div class="form-group">
                                 <label for="approval_status">Status Persetujuan</label>
                                 <select name="approval_status" id="approval_status" class="form-control">
+                                    <option value="draft" @selected(old('approval_status', $recipe->approval_status) === 'draft')>Draft</option>
                                     <option value="pending" @selected(old('approval_status', $recipe->approval_status) === 'pending')>Pending</option>
                                     <option value="approved" @selected(old('approval_status', $recipe->approval_status) === 'approved')>Approved</option>
                                     <option value="rejected" @selected(old('approval_status', $recipe->approval_status) === 'rejected')>Rejected</option>
@@ -195,8 +203,17 @@
                         </div>
 
                         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            <button type="submit" class="btn-terracotta rect">Simpan Perubahan Resep</button>
-                            <a href="{{ auth()->user()?->isAdmin() ? route('admin.recipes.approvals') : route('recipes.index') }}" class="btn-white">Batal</a>
+                            @if (auth()->user()?->isAdmin())
+                                <button type="submit" class="btn-terracotta rect">Simpan Perubahan Resep</button>
+                            @else
+                                @if (in_array($recipe->approval_status, ['draft', 'rejected'], true))
+                                    <button type="submit" name="submission_action" value="save_draft" class="btn-white">Simpan sebagai Draft</button>
+                                @endif
+                                <button type="submit" name="submission_action" value="resubmit" class="btn-terracotta rect">
+                                    {{ $recipe->isRejected() ? 'Kirim Ulang Setelah Revisi' : 'Simpan Revisi' }}
+                                </button>
+                            @endif
+                            <a href="{{ auth()->user()?->isAdmin() ? route('admin.recipes.approvals') : route('submissions.index') }}" class="btn-white">Batal</a>
                         </div>
                     </form>
                 </div>

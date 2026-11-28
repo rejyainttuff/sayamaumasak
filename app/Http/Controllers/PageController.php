@@ -6,11 +6,11 @@ use App\Models\Category;
 use App\Models\ContributorRequest;
 use App\Models\CulinaryStory;
 use App\Models\Food;
+use App\Models\Ingredient;
 use App\Models\Recipe;
 use App\Models\Review;
 use App\Models\SiteVisit;
 use App\Models\User;
-use App\Models\Ingredient;
 use App\Services\ContributorLevelService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
@@ -18,27 +18,47 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class PageController extends Controller
 {
-    public function home(): View
+    public function home(Request $request): View
     {
-        $foods = $this->getAllCulinaryData();
-        $popularFoods = array_values(array_filter($foods, fn (array $food): bool => $food['is_popular']));
-        $stories = [];
+        $foods = array_values(array_filter(
+            $this->getAllCulinaryData(),
+            fn (array $food): bool => ! empty($food['name']) && ! empty($food['slug'])
+        ));
 
+        // A. Dynamic Food Selection: max 3 random valid foods, avoiding repeating previous session set
+        $seenHomeSlugs = $request->session()->get('home_seen_foods', []);
+        $seenHomeSlugs = is_array($seenHomeSlugs) ? $seenHomeSlugs : [];
+
+        $freshPool = array_values(array_filter(
+            $foods,
+            fn (array $food): bool => ! in_array($food['slug'], $seenHomeSlugs, true)
+        ));
+        if (count($freshPool) < 3) {
+            $freshPool = $foods;
+        }
+        shuffle($freshPool);
+        $popularFoods = array_slice($freshPool, 0, 3);
+        $popularSlugs = array_column($popularFoods, 'slug');
+        $request->session()->put('home_seen_foods', $popularSlugs);
+
+        // B. Dynamic Culinary Stories (DB approved or curated fallback)
+        $stories = [];
         if ($this->hasDatabaseTable('culinary_stories')) {
             try {
                 $storyQuery = CulinaryStory::with(['food', 'user'])->latest();
                 if (Schema::hasColumn('culinary_stories', 'approval_status')) {
                     $storyQuery->where('approval_status', 'approved');
                 }
-                foreach ($storyQuery->take(3)->get() as $item) {
+                foreach ($storyQuery->take(6)->get() as $item) {
                     $plain = trim(strip_tags((string) $item->content));
                     $stories[] = [
                         'id' => $item->id,
@@ -47,15 +67,160 @@ class PageController extends Controller
                         'region' => (string) ($item->food?->origin_area ?: 'Bali'),
                         'author' => $item->user?->name ?? 'Tim Bali Culinary',
                         'thumbnail' => $item->thumbnail ?: ($item->food?->thumbnail ?? 'Assets/images/banner-beranda.png'),
-                        'excerpt' => strlen($plain) > 160 ? substr($plain, 0, 157).'...' : $plain,
+                        'excerpt' => strlen($plain) > 190 ? substr($plain, 0, 187).'...' : $plain,
                     ];
                 }
             } catch (Throwable) {
                 $stories = [];
             }
         }
+        if ($stories === []) {
+            $stories = CulinaryStoryController::curatedEditorialStories();
+        }
+        shuffle($stories);
+        $featuredStory = $stories[0] ?? null;
 
-        return view('home', compact('foods', 'popularFoods', 'stories'));
+        // C. Personalized / Recommended Recipes (prioritize unvisited & not in popularFoods)
+        $visitedSlugs = Auth::check()
+            ? (array) $request->session()->get('recently_viewed_user_'.Auth::id(), [])
+            : [];
+        $excludeForRec = array_unique(array_merge($popularSlugs, $visitedSlugs));
+
+        $recPool = array_values(array_filter(
+            $foods,
+            fn (array $food): bool => ! in_array($food['slug'], $excludeForRec, true)
+        ));
+        if (count($recPool) < 3) {
+            $recPool = array_values(array_filter(
+                $foods,
+                fn (array $food): bool => ! in_array($food['slug'], $popularSlugs, true)
+            ));
+        }
+        if ($recPool === []) {
+            $recPool = $foods;
+        }
+        shuffle($recPool);
+        $recommendedFoods = array_slice($recPool, 0, 3);
+
+        $recTitles = ['Resep yang Mungkin Kamu Suka', 'Resep Pilihan Hari Ini', 'Explore Something New'];
+        $layoutVariant = ((int) $request->session()->get('home_layout_variant', 0)) % 3;
+        $request->session()->put('home_layout_variant', ($layoutVariant + 1) % 3);
+
+        $sectionOrder = match ($layoutVariant) {
+            1 => ['story_photo', 'popular', 'recommended'],
+            2 => ['recommended', 'story_photo', 'popular'],
+            default => ['popular', 'story_photo', 'recommended'],
+        };
+        $recommendedHeading = $recTitles[$layoutVariant];
+
+        // D. Photo of the Day (approved user-uploaded photos only)
+        $communityPhotos = $this->getApprovedCommunityPhotos();
+        $photoOfTheDay = $communityPhotos !== [] ? $communityPhotos[array_rand($communityPhotos)] : null;
+
+        return view('home', compact(
+            'foods',
+            'popularFoods',
+            'stories',
+            'featuredStory',
+            'recommendedFoods',
+            'recommendedHeading',
+            'sectionOrder',
+            'photoOfTheDay'
+        ));
+    }
+
+    public function photoOfTheDay(): View
+    {
+        $photos = $this->getApprovedCommunityPhotos();
+        $featuredPhoto = $photos[0] ?? null;
+
+        return view('photo-of-the-day', compact('photos', 'featuredPhoto'));
+    }
+
+    /**
+     * Collect real, existing, Admin-approved user-uploaded photos from Foods/Recipes and Culinary Stories.
+     *
+     * @return array<int, array{url: string, title: string, author: string, source_type: string, detail_url: string, date: string}>
+     */
+    private function getApprovedCommunityPhotos(): array
+    {
+        $photos = [];
+
+        if ($this->hasDatabaseTable('foods')) {
+            try {
+                $foodQuery = Food::with(['user', 'recipes' => fn ($q) => $q->where('approval_status', 'approved')])
+                    ->whereNotNull('thumbnail')
+                    ->where('thumbnail', '!=', '')
+                    ->latest();
+
+                if (Schema::hasColumn('foods', 'approval_status')) {
+                    $foodQuery->where('approval_status', 'approved');
+                }
+
+                foreach ($foodQuery->get() as $food) {
+                    $cleanPath = ltrim((string) $food->thumbnail, '/');
+                    $exists = $cleanPath !== '' && (
+                        file_exists(public_path($cleanPath))
+                        || (str_starts_with($cleanPath, 'storage/') && Storage::disk('public')->exists(substr($cleanPath, strlen('storage/'))))
+                    );
+                    if ($exists) {
+                        $photos[] = [
+                            'url' => asset($cleanPath),
+                            'title' => $food->name,
+                            'author' => $food->user?->name ?? 'Komunitas Bali Culinary',
+                            'source_type' => 'Resep & Kuliner',
+                            'detail_url' => route('food.detail', $food->slug),
+                            'date' => $food->created_at ? $food->created_at->format('d M Y') : '-',
+                        ];
+                    }
+                }
+            } catch (Throwable) {
+            }
+        }
+
+        if ($this->hasDatabaseTable('culinary_stories')) {
+            try {
+                $storyQuery = CulinaryStory::with('user')->latest();
+                if (Schema::hasColumn('culinary_stories', 'approval_status')) {
+                    $storyQuery->where('approval_status', 'approved');
+                }
+
+                foreach ($storyQuery->get() as $story) {
+                    $storyImages = [];
+                    if (! empty($story->thumbnail)) {
+                        $storyImages[] = $story->thumbnail;
+                    }
+                    if (is_array($story->gallery_images)) {
+                        foreach ($story->gallery_images as $gImg) {
+                            if (is_string($gImg) && $gImg !== '') {
+                                $storyImages[] = $gImg;
+                            }
+                        }
+                    }
+
+                    foreach (array_unique($storyImages) as $imgPath) {
+                        $cleanPath = ltrim($imgPath, '/');
+                        $exists = $cleanPath !== '' && (
+                            file_exists(public_path($cleanPath))
+                            || (str_starts_with($cleanPath, 'storage/') && Storage::disk('public')->exists(substr($cleanPath, strlen('storage/'))))
+                        );
+                        if ($exists) {
+                            $photos[] = [
+                                'url' => asset($cleanPath),
+                                'title' => $story->title,
+                                'author' => $story->user?->name ?? 'Contributor Bali Culinary',
+                                'source_type' => 'Cerita Kuliner',
+                                'detail_url' => route('stories.show', $story->slug),
+                                'date' => $story->created_at ? $story->created_at->format('d M Y') : '-',
+                            ];
+                        }
+                    }
+                }
+            } catch (Throwable) {
+            }
+        }
+
+        return $photos;
     }
 
     public function explore(Request $request): View
@@ -219,9 +384,16 @@ class PageController extends Controller
         $slug = ($baseSlug !== '' ? $baseSlug : 'resep').'-'.strtolower(Str::random(4));
 
         $user = $request->user();
-        $approvalStatus = ($user && method_exists($user, 'isAdmin') && $user->isAdmin())
-            ? 'approved'
-            : 'pending';
+        if (! $user || ! $user->canSubmitRecipes()) {
+            return redirect()
+                ->route('contributor.apply')
+                ->withErrors(['reason' => 'Akun Anda belum memiliki izin mengirim resep. Silakan ajukan izin Contributor terlebih dahulu.']);
+        }
+
+        $isDraftRequest = $request->input('submission_action') === 'draft';
+        $approvalStatus = $isDraftRequest
+            ? 'draft'
+            : ($user->isAdmin() ? 'approved' : 'pending');
 
         DB::transaction(function () use (
             $validated,
@@ -275,9 +447,15 @@ class PageController extends Controller
             }
         });
 
+        $successMsg = $approvalStatus === 'draft'
+            ? 'Draft resep "'.$validated['name'].'" berhasil disimpan. Anda dapat melanjutkannya kapan saja di My Submissions.'
+            : ($approvalStatus === 'approved'
+                ? 'Resep "'.$validated['name'].'" berhasil ditambahkan dan dipublikasikan!'
+                : 'Resep "'.$validated['name'].'" berhasil dikirim dan menunggu persetujuan admin!');
+
         return redirect()
-            ->route('recipes.index')
-            ->with('success', 'Resep "'.$validated['name'].'" berhasil dikirim dan menunggu persetujuan admin!');
+            ->route('submissions.index')
+            ->with('success', $successMsg);
     }
 
     public function toggleFavorite(Request $request, string $slug): RedirectResponse
@@ -459,9 +637,8 @@ class PageController extends Controller
         $contributorRequest->update(['status' => $validated['status']]);
 
         if ($validated['status'] === 'approved' && $contributorRequest->user) {
-            if (! $contributorRequest->user->isAdmin()) {
-                $contributorRequest->user->update(['role' => 'contributor']);
-            }
+            // Keep 3-role system (user, helper, admin): grant recipe submission permission without creating a 4th role
+            $contributorRequest->user->update(['can_submit_recipes' => true]);
         }
 
         $label = $validated['status'] === 'approved' ? 'disetujui' : ($validated['status'] === 'rejected' ? 'ditolak' : 'pending');
@@ -506,48 +683,7 @@ class PageController extends Controller
         }
 
         if ($stories === []) {
-            $stories = [
-                [
-                    'id' => null,
-                    'slug' => null,
-                    'title' => 'Filosofi Base Genep dalam Dapur Tradisional Bali',
-                    'region' => 'Denpasar',
-                    'author' => 'Tim Bali Culinary',
-                    'thumbnail' => 'Assets/images/banner-beranda.png',
-                    'read_time' => '4 menit baca',
-                    'excerpt' => 'Base genep bukan sekadar racikan bumbu, melainkan harmoni rasa yang diwariskan turun-temurun untuk upacara adat hingga santapan keluarga.',
-                ],
-                [
-                    'id' => null,
-                    'slug' => null,
-                    'title' => 'Tradisi Megibung di Karangasem: Makan Bersama Tanpa Sekat',
-                    'region' => 'Karangasem',
-                    'author' => 'Tim Bali Culinary',
-                    'thumbnail' => 'Assets/images/banner-home.png',
-                    'read_time' => '5 menit baca',
-                    'excerpt' => 'Duduk melingkar menyantap nasi dan lauk khas Bali dalam satu dulang mengajarkan kebersamaan dan rasa syukur masyarakat Bali.',
-                ],
-                [
-                    'id' => null,
-                    'slug' => null,
-                    'title' => 'Rahasia Aroma Asap Ayam Betutu Gilimanuk',
-                    'region' => 'Jembrana',
-                    'author' => 'Tim Bali Culinary',
-                    'thumbnail' => 'Assets/images/banner-resep.png',
-                    'read_time' => '3 menit baca',
-                    'excerpt' => 'Proses memasak perlahan dalam balutan daun pisang dan bara sekam menghasilkan daging ayam empuk beraroma rempah yang memikat.',
-                ],
-                [
-                    'id' => null,
-                    'slug' => null,
-                    'title' => 'Jaje Laklak: Manisnya Jajanan Pasar Pagi di Bali',
-                    'region' => 'Klungkung',
-                    'author' => 'Tim Bali Culinary',
-                    'thumbnail' => 'Assets/images/banner-pengisian.png',
-                    'read_time' => '3 menit baca',
-                    'excerpt' => 'Dipanggang di atas cetakan tanah liat dengan aroma daun pandan, jaje laklak selalu menemani secangkir kopi Bali di pagi hari.',
-                ],
-            ];
+            $stories = CulinaryStoryController::curatedEditorialStories();
         }
 
         $perPage = 10;
@@ -778,7 +914,9 @@ class PageController extends Controller
         $stats = [
             'foods' => Schema::hasTable('foods') ? Food::count() : 0,
             'recipes' => Schema::hasTable('recipes') ? Recipe::count() : 0,
-            'contributors' => Schema::hasTable('users') ? User::whereIn('role', ['contributor', 'helper'])->count() : 0,
+            'contributors' => Schema::hasTable('users') && Schema::hasColumn('users', 'can_submit_recipes')
+                ? User::where('can_submit_recipes', true)->orWhere('role', 'helper')->count()
+                : 0,
             'users' => Schema::hasTable('users') ? User::count() : 0,
             'reviews' => Schema::hasTable('reviews') ? Review::count() : 0,
             'pending' => $pendingSubmissions->count(),
@@ -802,8 +940,12 @@ class PageController extends Controller
             'contributors' => $this->buildMetricCard(
                 'Total Kontributor',
                 $stats['contributors'],
-                Schema::hasTable('users') ? User::whereIn('role', ['contributor', 'helper'])->where('created_at', '>=', now()->subDays(30))->count() : 0,
-                Schema::hasTable('users') ? User::whereIn('role', ['contributor', 'helper'])->whereBetween('created_at', [now()->subDays(60), now()->subDays(30)])->count() : 0,
+                Schema::hasTable('users') && Schema::hasColumn('users', 'can_submit_recipes')
+                    ? User::where(fn ($q) => $q->where('can_submit_recipes', true)->orWhere('role', 'helper'))->where('created_at', '>=', now()->subDays(30))->count()
+                    : 0,
+                Schema::hasTable('users') && Schema::hasColumn('users', 'can_submit_recipes')
+                    ? User::where(fn ($q) => $q->where('can_submit_recipes', true)->orWhere('role', 'helper'))->whereBetween('created_at', [now()->subDays(60), now()->subDays(30)])->count()
+                    : 0,
                 true
             ),
             'reviews' => $this->buildMetricCard(
@@ -901,7 +1043,10 @@ class PageController extends Controller
         $analyticsSummary = [
             'total_users' => User::count(),
             'admins' => User::where('role', 'admin')->count(),
-            'contributors' => User::whereIn('role', ['contributor', 'helper'])->count(),
+            'helpers' => User::where('role', 'helper')->count(),
+            'contributors' => Schema::hasColumn('users', 'can_submit_recipes')
+                ? User::where('can_submit_recipes', true)->count()
+                : 0,
             'regular_users' => User::where('role', 'user')->count(),
             'total_visits' => Schema::hasTable('site_visits') ? SiteVisit::count() : 0,
             'total_recipes' => Schema::hasTable('recipes') ? Recipe::count() : 0,
@@ -914,14 +1059,20 @@ class PageController extends Controller
     public function updateUserRole(Request $request, User $user): RedirectResponse
     {
         $validated = $request->validate([
-            'role' => ['required', 'in:admin,contributor,helper,user'],
+            'role' => ['required', 'in:admin,helper,user'],
+            'can_submit_recipes' => ['nullable', 'boolean'],
         ]);
 
         if ($user->id === $request->user()->id && $validated['role'] !== 'admin') {
             return back()->with('error', 'Tidak dapat menurunkan role akun Admin milik sendiri.');
         }
 
-        $user->update(['role' => $validated['role']]);
+        $updateData = ['role' => $validated['role']];
+        if ($request->has('can_submit_recipes')) {
+            $updateData['can_submit_recipes'] = $request->boolean('can_submit_recipes');
+        }
+
+        $user->update($updateData);
 
         return back()->with('success', 'Role pengguna '.$user->name.' berhasil diperbarui menjadi '.ucfirst($validated['role']).'.');
     }
@@ -1271,7 +1422,7 @@ class PageController extends Controller
 
                 if ($visibleFoods->isNotEmpty()) {
                     return $visibleFoods->map(function (Food $food, int $index): array {
-                        /** @var \App\Models\Recipe|null $approvedRecipe */
+                        /** @var Recipe|null $approvedRecipe */
                         $approvedRecipe = $food->recipes->firstWhere('approval_status', 'approved');
                         $story = $food->culinaryStories->first();
 

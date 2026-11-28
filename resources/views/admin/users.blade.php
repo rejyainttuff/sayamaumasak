@@ -58,7 +58,6 @@
                             <select name="role" class="form-control" style="width: 140px; height: 36px;" onchange="this.form.submit()">
                                 <option value="">Semua Role</option>
                                 <option value="admin" @selected($roleFilter === 'admin')>Admin</option>
-                                <option value="contributor" @selected($roleFilter === 'contributor')>Contributor</option>
                                 <option value="helper" @selected($roleFilter === 'helper')>Helper</option>
                                 <option value="user" @selected($roleFilter === 'user')>User</option>
                             </select>
@@ -85,7 +84,10 @@
 
                                 <div style="display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0;">
                                     <span class="pill-tag">{{ ucfirst($member->role) }}</span>
-                                    @if ($member->isContributor() || $member->isAdmin())
+                                    @if ($member->can_submit_recipes)
+                                        <span class="pill-tag">Izin Kirim Resep</span>
+                                    @endif
+                                    @if ($member->canSubmitRecipes())
                                         <span class="pill-tag">Level {{ $member->contributor_level ?? 1 }}</span>
                                     @endif
                                 </div>
@@ -99,16 +101,22 @@
                                         <div>Bergabung: {{ $member->created_at?->format('d M Y') }}</div>
                                     </div>
 
-                                    <form action="{{ route('admin.users.role', $member) }}" method="POST" style="margin-top: 10px; display: flex; gap: 6px; align-items: center;">
+                                    <form action="{{ route('admin.users.role', $member) }}" method="POST" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
                                         @csrf
                                         @method('PATCH')
-                                        <select name="role" class="form-control" style="height: 34px; font-size: 12px;">
-                                            <option value="user" @selected($member->role === 'user')>User</option>
-                                            <option value="contributor" @selected($member->role === 'contributor')>Contributor</option>
-                                            <option value="helper" @selected($member->role === 'helper')>Helper</option>
-                                            <option value="admin" @selected($member->role === 'admin')>Admin</option>
-                                        </select>
-                                        <button type="submit" class="action-btn approve" style="height: 34px;">Simpan</button>
+                                        <div style="display: flex; gap: 6px; align-items: center;">
+                                            <select name="role" class="form-control" style="height: 34px; font-size: 12px;">
+                                                <option value="user" @selected($member->role === 'user')>User</option>
+                                                <option value="helper" @selected($member->role === 'helper')>Helper</option>
+                                                <option value="admin" @selected($member->role === 'admin')>Admin</option>
+                                            </select>
+                                            <button type="submit" class="action-btn approve" style="height: 34px;">Simpan</button>
+                                        </div>
+                                        <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text);">
+                                            <input type="hidden" name="can_submit_recipes" value="0">
+                                            <input type="checkbox" name="can_submit_recipes" value="1" @checked($member->can_submit_recipes)>
+                                            <span>Izin Kirim Resep (Contributor)</span>
+                                        </label>
                                     </form>
                                 </details>
                             </article>
