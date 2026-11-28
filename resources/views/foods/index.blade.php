@@ -79,10 +79,9 @@
                     @if ($foods->isEmpty())
                         <div class="recipe-empty" style="margin: 12px 0;">
                             <h3 style="font-family: 'Playfair Display', serif; color: var(--terracotta); margin: 0 0 6px;">Belum ada makanan ditemukan</h3>
-                            <p style="font-size: 13px; color: var(--muted); margin: 0 0 14px;">
-                                {{ ($currentSearch !== '' || $currentCategory !== '') ? 'Coba ubah kata kunci pencarian atau filter kategori.' : 'Mulai tambahkan data kuliner Bali pertama melalui tombol di bawah.' }}
+                            <p style="font-size: 13px; color: var(--muted); margin: 0;">
+                                {{ ($currentSearch !== '' || $currentCategory !== '') ? 'Coba ubah kata kunci pencarian atau filter kategori.' : 'Belum ada data kuliner Bali yang terdaftar.' }}
                             </p>
-                            <a href="{{ route('foods.create') }}" class="btn-terracotta sm">+ Tambah Makanan</a>
                         </div>
                     @else
                         <div class="admin-table-wrap">

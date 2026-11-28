@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -301,21 +302,28 @@ class PageController extends Controller
         }
 
         $reviews = collect();
-        $averageRating = $food['rating'] ?? 0;
-        $reviewsCount = $food['reviews_count'] ?? 0;
+        $averageRating = 0.0;
+        $reviewsCount = 0;
+        $userReview = null;
 
         if ($food && $this->hasDatabaseTable('foods') && $this->hasDatabaseTable('reviews')) {
             $foodModel = Food::where('slug', $food['slug'])->first();
 
             if ($foodModel) {
                 $reviews = $foodModel->reviews()->with('user')->latest()->get();
+                $reviewsCount = $reviews->count();
+                $averageRating = $reviewsCount > 0 ? round((float) $reviews->avg('rating'), 1) : 0.0;
 
-                if ($reviews->isNotEmpty()) {
-                    $reviewsCount = $reviews->count();
-                    $averageRating = round((float) $reviews->avg('rating'), 1);
+                if (Auth::check()) {
+                    $userReview = $reviews->firstWhere('user_id', Auth::id());
                 }
             }
         }
+
+        // Single source of truth: keep $food['rating'] & $food['reviews_count'] strictly synchronized with real DB reviews
+        $food['rating'] = $averageRating;
+        $food['reviews_count'] = $reviewsCount;
+        $lowRatingReasons = Review::LOW_RATING_REASONS;
 
         if (Auth::check() && $food) {
             $recentKey = 'recently_viewed_user_'.Auth::id();
@@ -328,7 +336,17 @@ class PageController extends Controller
             session()->put($recentKey, array_slice($recentSlugs, 0, 8));
         }
 
-        return view('food-detail', compact('food', 'foods', 'relatedFoods', 'isFavorited', 'reviews', 'averageRating', 'reviewsCount'));
+        return view('food-detail', compact(
+            'food',
+            'foods',
+            'relatedFoods',
+            'isFavorited',
+            'reviews',
+            'averageRating',
+            'reviewsCount',
+            'userReview',
+            'lowRatingReasons'
+        ));
     }
 
     public function createRecipe(): View
@@ -499,10 +517,7 @@ class PageController extends Controller
 
     public function storeReview(Request $request, string $slug): RedirectResponse
     {
-        $validated = $request->validate([
-            'rating' => ['required', 'integer', 'min:1', 'max:5'],
-            'comment' => ['nullable', 'string', 'max:1000'],
-        ]);
+        $payload = $this->validateReviewPayload($request);
 
         $food = $this->hasDatabaseTable('foods') ? Food::where('slug', $slug)->first() : null;
 
@@ -515,13 +530,103 @@ class PageController extends Controller
                 'user_id' => Auth::id(),
                 'food_id' => $food->id,
             ],
-            [
-                'rating' => (int) $validated['rating'],
-                'comment' => $validated['comment'] ?? null,
-            ]
+            $payload
         );
 
         return back()->with('success', 'Ulasan berhasil disimpan!');
+    }
+
+    public function updateReview(Request $request, Review $review): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user || (int) $review->user_id !== (int) $user->id) {
+            abort(403, 'Anda tidak memiliki izin untuk mengedit ulasan milik pengguna lain.');
+        }
+
+        $payload = $this->validateReviewPayload($request, 'edit_review_'.$review->id);
+
+        $review->update($payload);
+
+        return back()->with('success', 'Ulasan Anda berhasil diperbarui!');
+    }
+
+    public function destroyReview(Request $request, Review $review): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user || (int) $review->user_id !== (int) $user->id) {
+            abort(403, 'Anda tidak memiliki izin untuk menghapus ulasan milik pengguna lain.');
+        }
+
+        $review->delete();
+
+        return back()->with('success', 'Ulasan Anda berhasil dihapus.');
+    }
+
+    /**
+     * Validate review rating, optional comment, and conditional low-rating feedback reasons.
+     *
+     * @return array{rating: int, comment: ?string, feedback_reasons: ?array<int, string>, feedback_other: ?string}
+     */
+    private function validateReviewPayload(Request $request, ?string $errorBag = null): array
+    {
+        $rules = [
+            'rating' => ['required', 'integer', 'min:1', 'max:5'],
+            'comment' => ['nullable', 'string', 'max:1000'],
+            'feedback_reasons' => ['nullable', 'array'],
+            'feedback_reasons.*' => ['string', 'in:'.implode(',', Review::LOW_RATING_REASONS)],
+            'feedback_other' => ['nullable', 'string', 'max:500'],
+        ];
+
+        $messages = [
+            'rating.required' => 'Silakan pilih rating 1 sampai 5 bintang terlebih dahulu.',
+            'rating.integer' => 'Rating harus berupa angka 1 sampai 5.',
+            'rating.min' => 'Rating minimal adalah 1 bintang.',
+            'rating.max' => 'Rating maksimal adalah 5 bintang.',
+        ];
+
+        $validator = Validator::make($request->all(), $rules, $messages);
+
+        $validator->after(function ($v) use ($request): void {
+            $rating = (int) $request->input('rating');
+            $reasons = array_values(array_filter(
+                (array) $request->input('feedback_reasons', []),
+                fn ($item): bool => is_string($item) && trim($item) !== ''
+            ));
+            $otherText = trim((string) $request->input('feedback_other', ''));
+
+            if ($rating > 0 && $rating < 3) {
+                if ($reasons === []) {
+                    $v->errors()->add('feedback_reasons', 'Untuk rating di bawah 3 bintang, wajib memilih minimal satu alasan feedback.');
+                }
+                if (in_array('Lainnya', $reasons, true) && $otherText === '') {
+                    $v->errors()->add('feedback_other', 'Mohon jelaskan masalah yang dialami pada kolom Lainnya.');
+                }
+            }
+        });
+
+        $validated = $errorBag !== null
+            ? $validator->validateWithBag($errorBag)
+            : $validator->validate();
+
+        $rating = (int) $validated['rating'];
+        $reasons = $rating < 3
+            ? array_values(array_unique(array_filter(
+                $validated['feedback_reasons'] ?? [],
+                fn ($item): bool => is_string($item) && trim($item) !== ''
+            )))
+            : null;
+        $otherText = ($rating < 3 && is_array($reasons) && in_array('Lainnya', $reasons, true))
+            ? trim((string) ($validated['feedback_other'] ?? ''))
+            : null;
+
+        return [
+            'rating' => $rating,
+            'comment' => isset($validated['comment']) && trim((string) $validated['comment']) !== ''
+                ? trim((string) $validated['comment'])
+                : null,
+            'feedback_reasons' => $reasons !== [] ? $reasons : null,
+            'feedback_other' => $otherText !== '' ? $otherText : null,
+        ];
     }
 
     public function mySubmissions(Request $request): View
@@ -1384,14 +1489,20 @@ class PageController extends Controller
     {
         if ($this->hasDatabaseTable('foods')) {
             try {
-                $dbFoods = Food::with([
+                $foodQuery = Food::with([
                     'category',
                     'recipes' => function ($query) {
                         $query->with(['recipeIngredients.ingredient', 'recipeSteps'])
                             ->latest();
                     },
                     'culinaryStories',
-                ])->latest()->get();
+                ])->latest();
+
+                if ($this->hasDatabaseTable('reviews')) {
+                    $foodQuery->withCount('reviews')->withAvg('reviews', 'rating');
+                }
+
+                $dbFoods = $foodQuery->get();
 
                 $hasFoodApprovalColumn = Schema::hasColumn('foods', 'approval_status');
 
@@ -1479,8 +1590,10 @@ class PageController extends Controller
                             'difficulty' => $difficulty,
                             'cook_time' => $cookTime,
                             'servings' => $approvedRecipe?->servings ? $approvedRecipe->servings.' porsi' : '4 porsi',
-                            'rating' => round((float) ($food->reviews_avg_rating ?? 4.8), 1),
-                            'reviews_count' => max(1, (int) $food->reviews_count),
+                            'rating' => ((int) ($food->reviews_count ?? 0)) > 0
+                                ? round((float) $food->reviews_avg_rating, 1)
+                                : 0.0,
+                            'reviews_count' => (int) ($food->reviews_count ?? 0),
                             'is_popular' => $index < 3,
                             'description' => $description,
                             'history' => $history,

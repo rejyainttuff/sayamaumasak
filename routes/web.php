@@ -84,6 +84,10 @@ Route::middleware('auth')->group(function () {
         ->name('favorites.toggle');
     Route::post('/foods/{slug}/reviews', [PageController::class, 'storeReview'])
         ->name('reviews.store');
+    Route::put('/reviews/{review}', [PageController::class, 'updateReview'])
+        ->name('reviews.update');
+    Route::delete('/reviews/{review}', [PageController::class, 'destroyReview'])
+        ->name('reviews.destroy');
 
     Route::post('/reading/heartbeat', [PageController::class, 'recordReadingHeartbeat'])
         ->name('reading.heartbeat');

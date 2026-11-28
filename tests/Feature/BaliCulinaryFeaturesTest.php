@@ -645,4 +645,127 @@ class BaliCulinaryFeaturesTest extends TestCase
         $this->assertDatabaseMissing('recipes', ['id' => $recipeForAdmin->id]);
         $this->assertDatabaseMissing('culinary_stories', ['id' => $storyForAdmin->id]);
     }
+
+    public function test_food_detail_rating_synchronization_low_rating_feedback_and_edit_delete_reviews(): void
+    {
+        $user1 = User::factory()->create(['role' => 'user', 'name' => 'Putu Sari']);
+        $user2 = User::factory()->create(['role' => 'user', 'name' => 'Kadek Yoga']);
+        $user3 = User::factory()->create(['role' => 'user', 'name' => 'Komang Budi']);
+
+        $category = Category::create(['name' => 'Hidangan Utama', 'slug' => 'hidangan-utama']);
+        $food = Food::create([
+            'category_id' => $category->id,
+            'name' => 'Nasi Campur Bali',
+            'slug' => 'nasi-campur-bali',
+            'origin_area' => 'Denpasar',
+            'short_description' => 'Nasi campur khas Bali lengkap dengan sate lilit dan lawar.',
+            'approval_status' => 'approved',
+        ]);
+
+        // Initial state: 0 reviews -> shows 0.0 (never dummy 4.8), no separate "Beri Rating" form, no <select name="rating">
+        $this->get('/food-detail/nasi-campur-bali')
+            ->assertStatus(200)
+            ->assertSee('0.0')
+            ->assertSee('0 ulasan')
+            ->assertDontSee('4.8')
+            ->assertDontSee('Beri Rating')
+            ->assertDontSee('<select name="rating"', false);
+
+        // Scenario 3: Rating 2 without reason -> fails backend validation
+        $this->actingAs($user1)
+            ->post('/foods/nasi-campur-bali/reviews', [
+                'rating' => 2,
+                'comment' => 'Kurang cocok di lidah saya.',
+            ])
+            ->assertSessionHasErrors('feedback_reasons');
+        $this->assertSame(0, Review::where('food_id', $food->id)->count());
+
+        // Scenario 5a: Rating 1 with "Lainnya" but empty feedback_other -> fails backend validation
+        $this->actingAs($user1)
+            ->post('/foods/nasi-campur-bali/reviews', [
+                'rating' => 1,
+                'feedback_reasons' => ['Lainnya'],
+                'feedback_other' => '   ',
+            ])
+            ->assertSessionHasErrors('feedback_other');
+
+        // Scenario 5b: Rating 1 with "Lainnya" + explanation -> succeeds & syncs top + review summary to 1.0 / 5 (1 ulasan)
+        $this->actingAs($user1)
+            ->post('/foods/nasi-campur-bali/reviews', [
+                'rating' => 1,
+                'feedback_reasons' => ['Lainnya'],
+                'feedback_other' => 'Bumbu terlalu asin saat mengikuti takaran garam.',
+                'comment' => 'Mohon diperbaiki takarannya.',
+            ])
+            ->assertRedirect();
+
+        $review1 = Review::where('food_id', $food->id)->where('user_id', $user1->id)->firstOrFail();
+        $this->assertSame(1, $review1->rating);
+        $this->assertSame(['Lainnya'], $review1->feedback_reasons);
+        $this->assertSame('Bumbu terlalu asin saat mengikuti takaran garam.', $review1->feedback_other);
+
+        $this->actingAs($user1)
+            ->get('/food-detail/nasi-campur-bali')
+            ->assertStatus(200)
+            ->assertSee('1.0')
+            ->assertSee('1 ulasan')
+            ->assertDontSee('4.8')
+            ->assertSee('Edit Ulasan')
+            ->assertSee('Hapus Ulasan');
+
+        // Scenario 4: Rating 2 with valid reason succeeds
+        $this->actingAs($user2)
+            ->post('/foods/nasi-campur-bali/reviews', [
+                'rating' => 2,
+                'feedback_reasons' => ['Langkah memasak kurang jelas'],
+            ])
+            ->assertRedirect();
+        $this->assertSame(2, Review::where('food_id', $food->id)->count());
+
+        // Scenario 1 & 2: Rating 3 and 5 without reason succeed
+        $this->actingAs($user3)
+            ->post('/foods/nasi-campur-bali/reviews', [
+                'rating' => 3,
+                'comment' => 'Cukup enak.',
+            ])
+            ->assertRedirect();
+
+        // Security: user2 CANNOT edit or delete user1's review (403 Forbidden)
+        $this->actingAs($user2)
+            ->put("/reviews/{$review1->id}", ['rating' => 5, 'comment' => 'Diubah orang lain'])
+            ->assertStatus(403);
+        $this->actingAs($user2)
+            ->delete("/reviews/{$review1->id}")
+            ->assertStatus(403);
+
+        // Owner edits review1 from 1 -> 5 (updates same record, clears low-rating reasons, no duplicate!)
+        $this->actingAs($user1)
+            ->put("/reviews/{$review1->id}", [
+                'rating' => 5,
+                'comment' => 'Setelah dicoba ulang ternyata enak sekali!',
+            ])
+            ->assertRedirect();
+
+        $review1->refresh();
+        $this->assertSame(5, $review1->rating);
+        $this->assertNull($review1->feedback_reasons);
+        $this->assertNull($review1->feedback_other);
+        $this->assertSame(3, Review::where('food_id', $food->id)->count());
+
+        // Delete user2 and user3 reviews, then add user2 as 4/5 -> average of 5 and 4 = 4.5 (2 ulasan)
+        $review2 = Review::where('food_id', $food->id)->where('user_id', $user2->id)->firstOrFail();
+        $review3 = Review::where('food_id', $food->id)->where('user_id', $user3->id)->firstOrFail();
+
+        $this->actingAs($user3)->delete("/reviews/{$review3->id}")->assertRedirect();
+        $this->assertDatabaseMissing('reviews', ['id' => $review3->id]);
+
+        $this->actingAs($user2)
+            ->put("/reviews/{$review2->id}", ['rating' => 4, 'comment' => 'Mantap!'])
+            ->assertRedirect();
+
+        $this->get('/food-detail/nasi-campur-bali')
+            ->assertStatus(200)
+            ->assertSee('4.5')
+            ->assertSee('2 ulasan');
+    }
 }

@@ -264,6 +264,11 @@ class RecipeController extends Controller
             'approval_status' => 'approved',
             'rejection_reason' => null,
         ]);
+
+        if ($recipe->food && ($recipe->food->approval_status ?? 'pending') !== 'approved') {
+            $recipe->food->update(['approval_status' => 'approved']);
+        }
+
         $bonusGranted = $this->levelService->grantRecipeApprovalBonus($recipe);
 
         $message = $bonusGranted
