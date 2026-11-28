@@ -61,7 +61,7 @@ class CulinaryStoryController extends Controller
         $approvalStatus = $user->isAdmin() ? 'approved' : 'pending';
 
         CulinaryStory::create([
-            'food_id' => $validated['food_id'] ?? null,
+            'food_id' => $validated['food_id'] ?: null,
             'user_id' => $user->id,
             'title' => $validated['title'],
             'slug' => $slug,
