@@ -990,6 +990,7 @@ class PageController extends Controller
             'stats',
             'statCards',
             'recentMenu',
+            'pendingStories',
             'pendingSubmissions',
             'pendingSummary',
             'pendingContributorRequests',

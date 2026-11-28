@@ -12,7 +12,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('culinary_stories', function (Blueprint $table) {
-            $table->unsignedBigInteger('food_id')->nullable()->change();
             $table->text('rejection_reason')->nullable()->after('approval_status');
         });
     }
