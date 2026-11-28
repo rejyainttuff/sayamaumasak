@@ -17,7 +17,9 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -28,6 +30,12 @@ use Throwable;
 
 class PageController extends Controller
 {
+    /**
+     * Minimum verified review count preferred for the Highest Rated showcase slot
+     * so a single-review recipe does not automatically outrank multi-review recipes.
+     */
+    public const FEATURED_MIN_REVIEWS = 2;
+
     public function home(Request $request): View
     {
         $foods = array_values(array_filter(
@@ -231,12 +239,20 @@ class PageController extends Controller
         $selectedCategory = trim((string) $request->query('category', ''));
         $selectedRegion = trim((string) $request->query('region', ''));
         $selectedDifficulty = trim((string) $request->query('difficulty', ''));
+        $selectedCookTime = trim((string) $request->query('cook_time', ''));
         $sort = trim((string) $request->query('sort', 'default'));
 
         $categories = $this->getCategoriesList();
         $regions = $allFoods->pluck('region')->filter()->unique()->sort()->values()->all();
         $difficulties = ['Mudah', 'Sedang', 'Sulit'];
 
+        // 1. Select Highest Rated Recipe from real eligible public recipes
+        $highestRatedRecipe = $this->selectHighestRatedRecipe($allFoods);
+
+        // 2. Select up to 2 unique Random Featured recipes (excluding Highest Rated), stable for the current day
+        $randomFeaturedRecipes = $this->selectDailyRandomFeaturedRecipes($allFoods, $highestRatedRecipe['slug'] ?? null);
+
+        // 3. Full catalogue filtering, sorting, and pagination (operates on ALL eligible recipes)
         $filtered = $allFoods
             ->when($search !== '', function ($collection) use ($search) {
                 return $collection->filter(function (array $food) use ($search): bool {
@@ -248,20 +264,40 @@ class PageController extends Controller
             })
             ->when($selectedCategory !== '', fn ($collection) => $collection->where('category', $selectedCategory))
             ->when($selectedRegion !== '', fn ($collection) => $collection->where('region', $selectedRegion))
-            ->when($selectedDifficulty !== '', fn ($collection) => $collection->where('difficulty', $selectedDifficulty));
+            ->when($selectedDifficulty !== '', fn ($collection) => $collection->where('difficulty', $selectedDifficulty))
+            ->when($selectedCookTime !== '', function ($collection) use ($selectedCookTime) {
+                return $collection->filter(function (array $food) use ($selectedCookTime): bool {
+                    $minutes = (int) preg_replace('/\D+/', '', (string) ($food['cook_time'] ?? '0'));
+
+                    return match ($selectedCookTime) {
+                        'fast' => $minutes > 0 && $minutes <= 30,
+                        'medium' => $minutes > 30 && $minutes <= 60,
+                        'long' => $minutes > 60,
+                        default => true,
+                    };
+                });
+            });
 
         $filtered = match ($sort) {
             'name_asc' => $filtered->sortBy(fn (array $food) => mb_strtolower($food['name'])),
             'name_desc' => $filtered->sortByDesc(fn (array $food) => mb_strtolower($food['name'])),
             'region_asc' => $filtered->sortBy(fn (array $food) => mb_strtolower($food['region'] ?? '')),
-            'popular' => $filtered->sortByDesc(fn (array $food) => ! empty($food['is_popular']) ? 1 : 0),
+            'rating_desc' => $filtered->sort(function (array $a, array $b): int {
+                return ((float) ($b['rating'] ?? 0) <=> (float) ($a['rating'] ?? 0))
+                    ?: ((int) ($b['reviews_count'] ?? 0) <=> (int) ($a['reviews_count'] ?? 0));
+            }),
+            'popular' => $filtered->sort(function (array $a, array $b): int {
+                return ((int) ($b['reviews_count'] ?? 0) <=> (int) ($a['reviews_count'] ?? 0))
+                    ?: ((float) ($b['rating'] ?? 0) <=> (float) ($a['rating'] ?? 0));
+            }),
             default => $filtered,
         };
 
         $filtered = $filtered->values();
 
+        $totalFilteredCount = $filtered->count();
         $perPage = 10;
-        $totalPages = max(1, (int) ceil($filtered->count() / $perPage));
+        $totalPages = max(1, (int) ceil($totalFilteredCount / $perPage));
         $currentPage = min(max(1, (int) $request->query('page', 1)), $totalPages);
         $foods = $filtered->slice(($currentPage - 1) * $perPage, $perPage)->values()->all();
 
@@ -270,6 +306,9 @@ class PageController extends Controller
         return view('explore', compact(
             'foods',
             'popularFoods',
+            'highestRatedRecipe',
+            'randomFeaturedRecipes',
+            'totalFilteredCount',
             'categories',
             'regions',
             'difficulties',
@@ -277,9 +316,116 @@ class PageController extends Controller
             'selectedCategory',
             'selectedRegion',
             'selectedDifficulty',
+            'selectedCookTime',
             'sort',
             'currentPage',
             'totalPages'
+        ));
+    }
+
+    /**
+     * Select the Highest Rated eligible recipe using real review averages and counts.
+     * Prefers recipes with at least FEATURED_MIN_REVIEWS reviews, falling back to any rated
+     * recipe, and finally to the first eligible recipe when no reviews exist yet.
+     *
+     * @param  Collection<int, array<string, mixed>>  $eligibleFoods
+     * @return array<string, mixed>|null
+     */
+    private function selectHighestRatedRecipe($eligibleFoods): ?array
+    {
+        if ($eligibleFoods->isEmpty()) {
+            return null;
+        }
+
+        $rankComparator = static function (array $a, array $b): int {
+            $ratingCmp = ((float) ($b['rating'] ?? 0)) <=> ((float) ($a['rating'] ?? 0));
+            if ($ratingCmp !== 0) {
+                return $ratingCmp;
+            }
+
+            $countCmp = ((int) ($b['reviews_count'] ?? 0)) <=> ((int) ($a['reviews_count'] ?? 0));
+            if ($countCmp !== 0) {
+                return $countCmp;
+            }
+
+            return ((int) ($a['id'] ?? 0)) <=> ((int) ($b['id'] ?? 0));
+        };
+
+        $qualifiedPool = $eligibleFoods
+            ->filter(fn (array $food): bool => (int) ($food['reviews_count'] ?? 0) >= self::FEATURED_MIN_REVIEWS)
+            ->values();
+
+        if ($qualifiedPool->isNotEmpty()) {
+            return $qualifiedPool->sort($rankComparator)->first();
+        }
+
+        $anyRatedPool = $eligibleFoods
+            ->filter(fn (array $food): bool => (int) ($food['reviews_count'] ?? 0) >= 1)
+            ->values();
+
+        if ($anyRatedPool->isNotEmpty()) {
+            return $anyRatedPool->sort($rankComparator)->first();
+        }
+
+        return $eligibleFoods->sortBy('id')->first();
+    }
+
+    /**
+     * Select up to 2 unique eligible recipes excluding the Highest Rated recipe.
+     * Selection remains stable across page refreshes for the current calendar day (daily rotation).
+     *
+     * @param  Collection<int, array<string, mixed>>  $eligibleFoods
+     * @return array<int, array<string, mixed>>
+     */
+    private function selectDailyRandomFeaturedRecipes($eligibleFoods, ?string $excludeSlug): array
+    {
+        $candidates = $eligibleFoods
+            ->reject(fn (array $food): bool => $excludeSlug !== null && ($food['slug'] ?? '') === $excludeSlug)
+            ->unique('slug')
+            ->values();
+
+        if ($candidates->isEmpty()) {
+            return [];
+        }
+
+        $targetCount = min(2, $candidates->count());
+        $candidateBySlug = $candidates->keyBy('slug');
+        $todayKey = 'explore_daily_featured_'.Carbon::now()->toDateString();
+
+        $cachedSlugs = Cache::get($todayKey, []);
+        $validSlugs = [];
+
+        if (is_array($cachedSlugs)) {
+            foreach ($cachedSlugs as $slug) {
+                if (is_string($slug) && $candidateBySlug->has($slug) && ! in_array($slug, $validSlugs, true)) {
+                    $validSlugs[] = $slug;
+                }
+                if (count($validSlugs) >= $targetCount) {
+                    break;
+                }
+            }
+        }
+
+        if (count($validSlugs) < $targetCount) {
+            $remainingPool = $candidates
+                ->reject(fn (array $food): bool => in_array($food['slug'], $validSlugs, true))
+                ->shuffle()
+                ->pluck('slug')
+                ->all();
+
+            foreach ($remainingPool as $slug) {
+                $validSlugs[] = $slug;
+                if (count($validSlugs) >= $targetCount) {
+                    break;
+                }
+            }
+
+            Cache::put($todayKey, $validSlugs, Carbon::now()->endOfDay());
+        }
+
+        return array_values(array_map(
+            fn (string $slug): array => $candidateBySlug->get($slug),
+            $validSlugs
         ));
     }
 
@@ -1507,7 +1653,7 @@ class PageController extends Controller
                 $hasFoodApprovalColumn = Schema::hasColumn('foods', 'approval_status');
 
                 $visibleFoods = $dbFoods->reject(function (Food $food) use ($hasFoodApprovalColumn): bool {
-                    if ($hasFoodApprovalColumn && $food->approval_status === 'rejected') {
+                    if ($hasFoodApprovalColumn && $food->approval_status !== 'approved') {
                         return true;
                     }
 
@@ -1613,11 +1759,14 @@ class PageController extends Controller
     }
 
     /**
+     * Fallback static catalogue used only when the foods database table is empty.
+     * Ratings and review counts default to 0 so unverified numbers are never fabricated.
+     *
      * @return array<int, array<string, mixed>>
      */
     private function getDefaultCulinaryData(): array
     {
-        return [
+        $items = [
             [
                 'id' => 1,
                 'slug' => 'lawar-bali',
@@ -2003,5 +2152,12 @@ class PageController extends Controller
                 'image' => 'Assets/images/loloh-cemcem.jpg',
             ],
         ];
+
+        return array_map(static function (array $item): array {
+            $item['rating'] = 0.0;
+            $item['reviews_count'] = 0;
+
+            return $item;
+        }, $items);
     }
 }

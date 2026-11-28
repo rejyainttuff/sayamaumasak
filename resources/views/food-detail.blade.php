@@ -24,10 +24,22 @@
                 <div class="detail-left-col">
                     <div class="detail-hero-split">
                         <div class="detail-sample-image">
-                            @if (file_exists(public_path($food['image'])))
-                                <img src="{{ asset($food['image']) }}" alt="{{ $food['name'] }}">
+                            @php
+                                $detailImgPath = ltrim((string) ($food['image'] ?? ''), '/');
+                                $detailImgUrl = null;
+                                if ($detailImgPath !== '' && is_file(public_path($detailImgPath))) {
+                                    $detailImgUrl = asset($detailImgPath);
+                                } elseif (str_starts_with($detailImgPath, 'storage/') && \Illuminate\Support\Facades\Storage::disk('public')->exists(substr($detailImgPath, strlen('storage/')))) {
+                                    $detailImgUrl = asset($detailImgPath);
+                                }
+                            @endphp
+                            @if ($detailImgUrl)
+                                <img src="{{ $detailImgUrl }}" alt="{{ $food['name'] }}" width="640" height="440" fetchpriority="high">
                             @else
-                                <span class="detail-sample-label">Sample<br>gambar</span>
+                                <div class="detail-illustrated-placeholder">
+                                    <img src="{{ asset('Assets/images/image-for-reciepe.png') }}" alt="" width="136" height="110" fetchpriority="high">
+                                    <span class="detail-sample-label">{{ $food['name'] }}</span>
+                                </div>
                             @endif
 
                             @auth
@@ -152,7 +164,7 @@
                                 </p>
                             </div>
                         </div>
-                        <a href="#ulasan-section" class="btn-white" style="width: 100%; height: 38px; font-size: 12.5px; margin-top: 12px;">
+                        <a href="#ulasan-section" class="btn-white" style="width: 100%; min-height: 44px; font-size: 13px; margin-top: 12px;">
                             {{ $userReview ? 'Kelola Ulasan Anda' : 'Tulis Ulasan & Rating' }} &darr;
                         </a>
                     </div>
@@ -247,12 +259,15 @@
                             </div>
                         </div>
 
-                        <div class="form-group" style="margin-top: 14px;">
+                        <div class="form-group review-comment-group">
                             <label for="comment">Komentar (opsional)</label>
                             <textarea name="comment" id="comment" rows="3" class="form-control" placeholder="Bagikan pengalamanmu mencoba resep ini...">{{ old('comment') }}</textarea>
+                            <span class="field-helper-text">Ceritakan hasil masakan, takaran bumbu, atau tips tambahan bagi pembaca lain.</span>
                         </div>
 
-                        <button type="submit" class="btn-terracotta rect">Kirim Ulasan</button>
+                        <div class="review-submit-actions">
+                            <button type="submit" class="btn-terracotta rect review-submit-btn">Kirim Ulasan</button>
+                        </div>
                     </form>
                 @else
                     <div class="alert-banner success" style="margin: 14px 0 18px; font-size: 13px;">
@@ -392,14 +407,14 @@
                                         </div>
                                     </div>
 
-                                    <div class="form-group" style="margin-top: 12px;">
+                                    <div class="form-group review-comment-group">
                                         <label for="edit-comment-{{ $review->id }}">Komentar (opsional)</label>
                                         <textarea name="comment" id="edit-comment-{{ $review->id }}" rows="3" class="form-control">{{ $editComment }}</textarea>
                                     </div>
 
-                                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                        <button type="submit" class="btn-terracotta sm">Simpan Perubahan</button>
-                                        <button type="button" class="btn-white" style="height: 36px;" data-toggle-edit-review="{{ $review->id }}">Batal</button>
+                                    <div class="review-submit-actions">
+                                        <button type="submit" class="btn-terracotta sm review-submit-btn">Simpan Perubahan</button>
+                                        <button type="button" class="btn-white review-cancel-btn" data-toggle-edit-review="{{ $review->id }}">Batal</button>
                                     </div>
                                 </form>
                             </div>

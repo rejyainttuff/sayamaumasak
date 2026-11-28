@@ -5402,3 +5402,828 @@ button.is-loading {
     margin: 0;
     background: #ffffff;
 }
+
+/* =========================================================
+   FINAL PRE-SUBMISSION REFINEMENT:
+   ASYMMETRIC FEATURED SHOWCASE, EXPLORE CATALOGUE HEADER,
+   FOOD MANAGEMENT EDIT FORM, REVIEW SPACING & ACCESSIBILITY
+   ========================================================= */
+
+/* Base Interaction Affordances & Accessible Focus Ring */
+a[href],
+button:not(:disabled),
+select:not(:disabled),
+summary,
+label[for],
+input[type='checkbox']:not(:disabled),
+input[type='radio']:not(:disabled),
+[role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled,
+textarea:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[role='button']:focus-visible {
+    outline: 2.5px solid var(--terracotta-dark);
+    outline-offset: 2px;
+}
+
+.field-helper-text {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--muted);
+}
+
+/* 1. Asymmetric Featured Recipe Showcase (Explore / Recipes Page) */
+.featured-showcase-section {
+    padding: 8px 0 42px;
+    margin-bottom: 38px;
+    border-bottom: 1px solid var(--border);
+}
+
+.featured-showcase-header {
+    margin-bottom: 20px;
+}
+
+.featured-showcase-sub {
+    margin: 4px 0 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--muted);
+}
+
+.featured-asymmetric-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.48fr) minmax(330px, 1fr);
+    gap: 24px;
+    align-items: stretch;
+}
+
+.featured-asymmetric-grid.is-single {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 780px;
+}
+
+/* Left Anchor Card: Highest Rated Recipe */
+.featured-lead-card {
+    background: #fffaf3;
+    border: 1px solid var(--border-accent);
+    border-radius: 20px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 28px rgba(63, 40, 28, 0.08);
+    transition: border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.featured-lead-card:hover {
+    border-color: var(--terracotta-dark);
+    box-shadow: 0 16px 34px rgba(63, 40, 28, 0.12);
+}
+
+.featured-lead-media {
+    position: relative;
+    display: block;
+    aspect-ratio: 16 / 10;
+    min-height: 270px;
+    background: #f4e6d2;
+    overflow: hidden;
+    text-decoration: none;
+}
+
+.featured-lead-media > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 320ms var(--ease-editorial);
+}
+
+.featured-lead-card:hover .featured-lead-media > img {
+    transform: scale(1.03);
+}
+
+.featured-illustrated-placeholder,
+.detail-illustrated-placeholder {
+    width: 100%;
+    height: 100%;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+    background: linear-gradient(180deg, #f8ecda 0%, #efe0c8 100%);
+    color: var(--brown);
+    text-align: center;
+}
+
+.featured-illustrated-placeholder img,
+.detail-illustrated-placeholder img {
+    width: 152px;
+    height: auto;
+    object-fit: contain;
+    transition: transform 320ms var(--ease-editorial);
+}
+
+.featured-lead-card:hover .featured-illustrated-placeholder img {
+    transform: scale(1.04);
+}
+
+.featured-illustrated-placeholder span {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+}
+
+.featured-badge-primary {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background: #9e441c;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 6px 12px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(35, 24, 18, 0.22);
+}
+
+.featured-lead-body {
+    padding: 24px 26px 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+}
+
+.featured-lead-meta-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 14px;
+    flex-wrap: wrap;
+}
+
+.featured-rating-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #f9efe1;
+    border: 1px solid var(--border);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.featured-rating-pill .star {
+    color: #c98a09;
+    font-size: 15px;
+}
+
+.featured-meta-facts {
+    font-size: 12.5px;
+    color: var(--muted);
+    font-weight: 500;
+}
+
+.featured-lead-title {
+    margin: 2px 0 0;
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(24px, 2.6vw, 32px);
+    line-height: 1.2;
+}
+
+.featured-lead-title a {
+    text-decoration: none;
+    color: var(--text);
+    transition: color 160ms ease;
+}
+
+.featured-lead-title a:hover {
+    color: var(--terracotta-dark);
+}
+
+.featured-lead-desc {
+    margin: 0;
+    font-size: 14.5px;
+    line-height: 1.7;
+    color: var(--muted);
+    max-width: 64ch;
+}
+
+.featured-lead-actions {
+    margin-top: auto;
+    padding-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.featured-lead-cta {
+    min-height: 44px;
+    padding: 0 22px;
+    background: #a6461b;
+    color: #ffffff;
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+.featured-lead-cta:hover {
+    background: #8d3914;
+}
+
+/* Right Supporting Column: Two Stacked Random Featured Cards */
+.featured-side-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    height: 100%;
+}
+
+.featured-side-card {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 146px minmax(0, 1fr);
+    background: #fffdf9;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.featured-side-card:hover {
+    border-color: var(--border-accent);
+    box-shadow: 0 8px 22px rgba(63, 40, 28, 0.07);
+}
+
+.featured-side-media {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 168px;
+    background: #f5e8d6;
+    overflow: hidden;
+    text-decoration: none;
+}
+
+.featured-side-media > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 280ms var(--ease-editorial);
+}
+
+.featured-side-card:hover .featured-side-media > img {
+    transform: scale(1.03);
+}
+
+.featured-side-placeholder {
+    width: 100%;
+    height: 100%;
+    min-height: 168px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 14px;
+    background: linear-gradient(180deg, #f8ecda 0%, #efe0c8 100%);
+    text-align: center;
+}
+
+.featured-side-placeholder img {
+    width: 78px;
+    height: auto;
+    object-fit: contain;
+}
+
+.featured-side-placeholder small {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.featured-side-body {
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.featured-side-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.featured-badge-secondary {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: #f5e3cd;
+    color: #7c3414;
+}
+
+.featured-side-rating {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.featured-side-rating .star {
+    color: #c98a09;
+}
+
+.featured-side-title {
+    margin: 0;
+    font-family: 'Playfair Display', serif;
+    font-size: 19px;
+    line-height: 1.28;
+}
+
+.featured-side-title a {
+    text-decoration: none;
+    color: var(--text);
+}
+
+.featured-side-title a:hover {
+    color: var(--terracotta-dark);
+}
+
+.featured-side-desc {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--muted);
+}
+
+.featured-side-footer {
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px solid rgba(227, 204, 176, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.featured-side-meta {
+    font-size: 11.5px;
+    color: var(--muted);
+}
+
+.featured-side-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #9e441c;
+    text-decoration: none;
+    background: #fbf1e4;
+    transition: background 160ms ease, color 160ms ease;
+}
+
+.featured-side-link:hover {
+    background: #9e441c;
+    color: #ffffff;
+}
+
+/* 2. Explore All Recipes Header, Add Recipe Button & Illustrated Catalogue Fallback */
+.catalogue-section-shell {
+    scroll-margin-top: 90px;
+}
+
+.catalogue-header-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px 24px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.catalogue-header-sub {
+    margin: 4px 0 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--muted);
+    max-width: 62ch;
+}
+
+.catalogue-add-btn {
+    min-height: 44px;
+    padding: 0 20px;
+    background: #a6461b;
+    color: #ffffff;
+    font-size: 13.5px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.catalogue-add-btn:hover {
+    background: #8d3914;
+}
+
+.toolbar-submit-btn,
+.toolbar-reset-btn {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.explore-card-illustrated {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 16px;
+    background: linear-gradient(180deg, #f8ecda 0%, #efe0c8 100%);
+    text-align: center;
+}
+
+.explore-card-illustrated img {
+    width: 82px !important;
+    height: auto !important;
+    object-fit: contain !important;
+}
+
+.explore-card-illustrated span {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--brown);
+}
+
+/* 3. Admin Dashboard -> Food Management Edit Form */
+.food-edit-hero-bar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.food-edit-back-link {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.food-edit-card {
+    max-width: 1080px;
+    width: 100%;
+    padding: 26px 28px;
+}
+
+.food-edit-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-bottom: 18px;
+    margin-bottom: 22px;
+    border-bottom: 1px solid var(--border);
+}
+
+.food-edit-card-head h2 {
+    margin: 0;
+    font-family: 'Playfair Display', serif;
+    font-size: 23px;
+    color: var(--text);
+}
+
+.food-edit-card-head p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.food-edit-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(290px, 1fr);
+    gap: 28px;
+    align-items: start;
+}
+
+.food-edit-main-col .form-group {
+    margin-bottom: 18px;
+}
+
+.food-edit-desc-group {
+    margin-top: 4px;
+    margin-bottom: 0 !important;
+}
+
+.food-edit-desc-group textarea.form-control {
+    min-height: 132px;
+    line-height: 1.65;
+    padding: 12px 14px;
+}
+
+.food-edit-upload-panel {
+    background: #fffaf3;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.food-edit-upload-title {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+}
+
+.food-edit-preview-frame {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #f5e8d6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.food-edit-preview-frame > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.food-edit-preview-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 18px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.food-edit-preview-empty img {
+    width: 84px;
+    height: auto;
+    object-fit: contain;
+}
+
+.food-file-input {
+    height: auto;
+    min-height: 44px;
+    padding: 9px 12px;
+}
+
+.food-edit-actions {
+    margin-top: 26px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.food-edit-submit-btn {
+    min-height: 44px;
+    padding: 0 24px;
+    background: #a6461b;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.food-edit-submit-btn:hover {
+    background: #8d3914;
+}
+
+.food-edit-cancel-btn {
+    min-height: 44px;
+    padding: 0 22px;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 4. Review Form Cohesive Spacing & Touch Comfort */
+.review-comment-group {
+    margin-top: 18px !important;
+    margin-bottom: 0 !important;
+}
+
+.review-comment-group textarea.form-control {
+    min-height: 98px;
+    padding: 12px 14px;
+    line-height: 1.6;
+}
+
+.review-submit-actions {
+    margin-top: 22px;
+    padding-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.review-submit-btn,
+.review-cancel-btn {
+    min-height: 44px !important;
+    padding: 0 24px;
+    font-size: 13.5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 5. Multi-Breakpoint Responsive Reflow (Laptop, Tablet, Mobile) */
+@media (max-width: 1040px) {
+    .featured-asymmetric-grid {
+        grid-template-columns: minmax(0, 1.32fr) minmax(300px, 1fr);
+        gap: 20px;
+    }
+
+    .featured-side-card {
+        grid-template-columns: 128px minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    /* Tablet: Lead card spans full width on top; two supporting cards sit side-by-side below */
+    .featured-asymmetric-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .featured-side-stack {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        height: auto;
+    }
+
+    .featured-side-card {
+        grid-template-columns: 1fr;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .featured-side-media {
+        aspect-ratio: 16 / 10;
+        height: auto;
+        min-height: 170px;
+    }
+
+    .food-edit-layout {
+        grid-template-columns: 1fr;
+        gap: 22px;
+    }
+
+    .food-edit-card {
+        padding: 22px 20px;
+    }
+}
+
+@media (max-width: 640px) {
+    /* Mobile: Clean vertical order -> Highest Rated, Random Featured 01, Random Featured 02, Explore All Recipes */
+    .featured-showcase-section {
+        padding: 4px 0 32px;
+        margin-bottom: 30px;
+    }
+
+    .featured-side-stack {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .featured-lead-media {
+        min-height: 210px;
+    }
+
+    .featured-lead-body {
+        padding: 18px 18px 20px;
+    }
+
+    .featured-lead-cta,
+    .catalogue-add-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .featured-side-link {
+        min-height: 44px;
+        padding: 0 14px;
+    }
+
+    .catalogue-header-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .food-edit-card {
+        padding: 18px 16px;
+    }
+
+    .food-edit-actions,
+    .review-submit-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .food-edit-submit-btn,
+    .food-edit-cancel-btn,
+    .review-submit-btn,
+    .review-cancel-btn {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .featured-lead-card,
+    .featured-lead-media > img,
+    .featured-illustrated-placeholder img,
+    .featured-side-card,
+    .featured-side-media > img,
+    .featured-side-link {
+        transition: none !important;
+        transform: none !important;
+    }
+}
+
+/* =========================================================
+   SELECTIVE BOTTOM-TO-TOP PAGE TRANSITION (5 MAIN SECTIONS ONLY:
+   BERANDA, RESEP, CERITA, TENTANG, USER PROFILE)
+   ========================================================= */
+@keyframes mainSectionBottomRise {
+    0% {
+        opacity: 0;
+        transform: translate3d(0, 20px, 0);
+    }
+    100% {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.recipe-main.page-rise-section {
+    animation: mainSectionBottomRise 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.recipe-main.page-rise-section.is-rise-settled {
+    animation: none;
+    opacity: 1;
+    transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .recipe-main.page-rise-section {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+    }
+}

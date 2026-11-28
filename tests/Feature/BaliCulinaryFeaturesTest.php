@@ -768,4 +768,212 @@ class BaliCulinaryFeaturesTest extends TestCase
             ->assertSee('4.5')
             ->assertSee('2 ulasan');
     }
+
+    public function test_explore_asymmetric_featured_showcase_daily_rotation_filters_add_recipe_and_food_edit(): void
+    {
+        Storage::fake('public');
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $regularUser = User::factory()->create(['role' => 'user', 'can_submit_recipes' => false]);
+        $contributor = User::factory()->create(['role' => 'user', 'can_submit_recipes' => true]);
+
+        $catMain = Category::create(['name' => 'Hidangan Utama', 'slug' => 'hidangan-utama']);
+        $catSnack = Category::create(['name' => 'Jajanan Tradisional', 'slug' => 'jajanan-tradisional']);
+
+        // 1 review of 5.0 (below 2-review threshold)
+        $singleReviewFood = Food::create([
+            'category_id' => $catMain->id,
+            'name' => 'Sate Kakul',
+            'slug' => 'sate-kakul',
+            'origin_area' => 'Ubud',
+            'short_description' => 'Sate kakul bumbu rempah khas Ubud.',
+            'approval_status' => 'approved',
+        ]);
+        Review::create(['user_id' => $regularUser->id, 'food_id' => $singleReviewFood->id, 'rating' => 5]);
+
+        // 2 reviews of 5 & 4 => avg 4.5 (meets 2-review threshold -> must win Highest Rated!)
+        $topQualifiedFood = Food::create([
+            'category_id' => $catMain->id,
+            'name' => 'Ayam Betutu Juara',
+            'slug' => 'ayam-betutu-juara',
+            'origin_area' => 'Gilimanuk',
+            'short_description' => 'Ayam betutu rempah lengkap khas Gilimanuk.',
+            'approval_status' => 'approved',
+        ]);
+        Recipe::create([
+            'food_id' => $topQualifiedFood->id,
+            'user_id' => $admin->id,
+            'title' => 'Resep Ayam Betutu Juara',
+            'cook_time_minutes' => 90,
+            'difficulty' => 'sulit',
+            'approval_status' => 'approved',
+        ]);
+        Review::create(['user_id' => $regularUser->id, 'food_id' => $topQualifiedFood->id, 'rating' => 5]);
+        Review::create(['user_id' => $contributor->id, 'food_id' => $topQualifiedFood->id, 'rating' => 4]);
+
+        // 2 reviews of 4 & 4 => avg 4.0
+        $secondQualifiedFood = Food::create([
+            'category_id' => $catMain->id,
+            'name' => 'Tipat Blayag Buleleng',
+            'slug' => 'tipat-blayag-buleleng',
+            'origin_area' => 'Buleleng',
+            'short_description' => 'Tipat blayag kuah kuning gurih khas Buleleng.',
+            'approval_status' => 'approved',
+        ]);
+        Review::create(['user_id' => $regularUser->id, 'food_id' => $secondQualifiedFood->id, 'rating' => 4]);
+        Review::create(['user_id' => $contributor->id, 'food_id' => $secondQualifiedFood->id, 'rating' => 4]);
+
+        // 0 reviews, fast cook time (20m), Mudah
+        $quickSnackFood = Food::create([
+            'category_id' => $catSnack->id,
+            'name' => 'Jaje Laklak Tabanan',
+            'slug' => 'jaje-laklak-tabanan',
+            'origin_area' => 'Tabanan',
+            'short_description' => 'Kue tradisional tepung beras dengan kelapa dan gula aren.',
+            'approval_status' => 'approved',
+        ]);
+        Recipe::create([
+            'food_id' => $quickSnackFood->id,
+            'user_id' => $admin->id,
+            'title' => 'Resep Jaje Laklak',
+            'cook_time_minutes' => 20,
+            'difficulty' => 'mudah',
+            'approval_status' => 'approved',
+        ]);
+
+        // Pending food with three 5-star reviews -> MUST NEVER appear in Highest Rated, Random Featured, or Catalogue
+        $pendingFood = Food::create([
+            'category_id' => $catMain->id,
+            'name' => 'Resep Rahasia Pending',
+            'slug' => 'resep-rahasia-pending',
+            'origin_area' => 'Badung',
+            'short_description' => 'Belum disetujui admin.',
+            'approval_status' => 'pending',
+        ]);
+        Review::create(['user_id' => $admin->id, 'food_id' => $pendingFood->id, 'rating' => 5]);
+        Review::create(['user_id' => $regularUser->id, 'food_id' => $pendingFood->id, 'rating' => 5]);
+        Review::create(['user_id' => $contributor->id, 'food_id' => $pendingFood->id, 'rating' => 5]);
+
+        // Guest visit: sees Highest Rated + 2 unique Random Featured + Explore All Recipes, NO "+ Tambah Resep"
+        $res1 = $this->get('/explore');
+        $res1->assertStatus(200)
+            ->assertSee('HIGHEST RATED')
+            ->assertSee('FEATURED PICK')
+            ->assertSee('Explore All Recipes')
+            ->assertSee('Ayam Betutu Juara')
+            ->assertDontSee('Resep Rahasia Pending')
+            ->assertDontSee('+ Tambah Resep');
+
+        $highest = $res1->viewData('highestRatedRecipe');
+        $randoms1 = $res1->viewData('randomFeaturedRecipes');
+        $catalogueFoods = $res1->viewData('foods');
+
+        $this->assertSame('ayam-betutu-juara', $highest['slug']);
+        $this->assertSame(4.5, $highest['rating']);
+        $this->assertSame(2, $highest['reviews_count']);
+        $this->assertCount(2, $randoms1);
+        $this->assertNotSame($randoms1[0]['slug'], $randoms1[1]['slug']);
+        $this->assertNotContains('ayam-betutu-juara', array_column($randoms1, 'slug'));
+        $this->assertNotContains('resep-rahasia-pending', array_column($randoms1, 'slug'));
+        $this->assertCount(4, $catalogueFoods);
+
+        // Second refresh on same day keeps the exact same 2 Random Featured recipes
+        $res2 = $this->get('/explore');
+        $randoms2 = $res2->viewData('randomFeaturedRecipes');
+        $this->assertSame(array_column($randoms1, 'slug'), array_column($randoms2, 'slug'));
+
+        // Permission check for "+ Tambah Resep"
+        $this->actingAs($regularUser)->get('/explore')->assertDontSee('+ Tambah Resep');
+        $this->actingAs($contributor)->get('/explore')->assertSee('+ Tambah Resep')->assertSee(route('recipe.create'), false);
+
+        // Search, category, difficulty, and cooking-time filters operate on the full catalogue
+        $this->get('/explore?search=Laklak')
+            ->assertStatus(200)
+            ->assertViewHas('totalFilteredCount', 1);
+
+        $this->get('/explore?category=Jajanan+Tradisional&difficulty=Mudah&cook_time=fast')
+            ->assertStatus(200)
+            ->assertViewHas('totalFilteredCount', 1);
+
+        // Admin Food Management Edit form loads & updates cleanly
+        $this->actingAs($admin)
+            ->get("/foods/{$quickSnackFood->id}/edit")
+            ->assertStatus(200)
+            ->assertSee('Detail Katalog Makanan')
+            ->assertSee('Perbarui Makanan')
+            ->assertSee('Batal');
+
+        $pngBytes = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=');
+        $this->actingAs($admin)
+            ->put("/foods/{$quickSnackFood->id}", [
+                'name' => 'Jaje Laklak Pandan Asli',
+                'category_id' => $catSnack->id,
+                'origin_area' => 'Tabanan',
+                'short_description' => 'Jaje laklak pandan tradisional khas Tabanan dengan sirup gula aren.',
+                'thumbnail' => UploadedFile::fake()->createWithContent('laklak.png', $pngBytes),
+            ])
+            ->assertRedirect(route('foods.index'));
+
+        $quickSnackFood->refresh();
+        $this->assertSame('Jaje Laklak Pandan Asli', $quickSnackFood->name);
+        $this->assertNotNull($quickSnackFood->thumbnail);
+    }
+
+    public function test_selective_bottom_to_top_page_transition_applies_only_to_five_main_sections(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $helper = User::factory()->create(['role' => 'helper']);
+        $user = User::factory()->create(['role' => 'user', 'can_submit_recipes' => true]);
+        $category = Category::create(['name' => 'Hidangan Utama', 'slug' => 'hidangan-utama']);
+        Food::create([
+            'category_id' => $category->id,
+            'name' => 'Lawar Klungah',
+            'slug' => 'lawar-klungah',
+            'origin_area' => 'Klungkung',
+            'approval_status' => 'approved',
+        ]);
+
+        // 1-4. Public main sections MUST include the selective bottom-to-top transition class
+        foreach (['/', '/explore', '/recipe', '/stories', '/about'] as $includedPath) {
+            $this->get($includedPath)
+                ->assertStatus(200)
+                ->assertSee('page-rise-section', false)
+                ->assertSee('data-page-rise', false);
+        }
+
+        // Excluded guest pages (Login, Register, Change Password) MUST NOT include page-rise-section
+        foreach (['/login', '/register', '/change-password'] as $authPath) {
+            $this->get($authPath)
+                ->assertStatus(200)
+                ->assertDontSee('page-rise-section', false);
+        }
+
+        // 5. User Profile (/account) MUST include the selective bottom-to-top transition class
+        $this->actingAs($user)
+            ->get('/account')
+            ->assertStatus(200)
+            ->assertSee('page-rise-section', false)
+            ->assertSee('data-page-rise', false);
+
+        // Excluded secondary/sub-pages MUST NOT include page-rise-section
+        foreach (['/photo-of-the-day', '/food-detail/lawar-klungah', '/favorites', '/my-submissions', '/recipe/create', '/account/edit'] as $excludedUserPath) {
+            $this->actingAs($user)
+                ->get($excludedUserPath)
+                ->assertStatus(200)
+                ->assertDontSee('page-rise-section', false);
+        }
+
+        // Excluded Admin & Helper management pages MUST NOT include page-rise-section
+        foreach (['/admin', '/foods', '/admin/users', '/admin/stories', '/admin/recipe-approvals'] as $adminPath) {
+            $this->actingAs($admin)
+                ->get($adminPath)
+                ->assertStatus(200)
+                ->assertDontSee('page-rise-section', false);
+        }
+
+        $this->actingAs($helper)
+            ->get('/admin/recipe-approvals')
+            ->assertStatus(200)
+            ->assertDontSee('page-rise-section', false);
+    }
 }

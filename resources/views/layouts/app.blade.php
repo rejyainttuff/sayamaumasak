@@ -17,6 +17,10 @@
     @php
         // Canonical logo asset path (replace public/Assets/images/baliculinarylogo.png to update everywhere)
         $navCompactIcon = asset('Assets/images/baliculinarylogo.png');
+
+        // Selective bottom-to-top page transition ONLY for the 5 main sections:
+        // 1. Beranda (home), 2. Resep (explore, recipe), 3. Cerita (stories), 4. Tentang (about), 5. Profile (account)
+        $isPrimarySectionTransition = request()->routeIs('home', 'explore', 'recipe', 'stories', 'about', 'account');
     @endphp
 
     @hasSection('hide_main_nav')
@@ -102,7 +106,7 @@
         </nav>
     @endif
 
-    <main class="recipe-main">
+    <main class="recipe-main{{ $isPrimarySectionTransition ? ' page-rise-section' : '' }}" @if ($isPrimarySectionTransition) data-page-rise @endif>
         @yield('content')
     </main>
 
@@ -276,6 +280,24 @@
                 });
                 @endguest
             };
+
+            // Release transform after the 5-section bottom-to-top entrance finishes
+            // and keep Back/Forward bfcache restores instant without flicker
+            const riseMain = document.querySelector('[data-page-rise]');
+            if (riseMain) {
+                riseMain.addEventListener('animationend', function (event) {
+                    if (event.target === riseMain) {
+                        riseMain.classList.add('is-rise-settled');
+                    }
+                }, { once: true });
+
+                window.addEventListener('pageshow', function (event) {
+                    if (event.persisted) {
+                        riseMain.classList.remove('is-rise-settled');
+                        void riseMain.offsetWidth;
+                    }
+                });
+            }
         })();
     </script>
 
