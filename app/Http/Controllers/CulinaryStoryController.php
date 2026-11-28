@@ -115,4 +115,18 @@ class CulinaryStoryController extends Controller
 
         return $slug;
     }
+
+    public function approve(CulinaryStory $story): RedirectResponse
+    {
+        $story->update(['approval_status' => 'approved']);
+
+        return back()->with('success', 'Cerita kuliner berhasil disetujui.');
+    }
+
+    public function reject(CulinaryStory $story): RedirectResponse
+    {
+        $story->update(['approval_status' => 'rejected']);
+
+        return back()->with('success', 'Cerita kuliner ditolak.');
+    }
 }

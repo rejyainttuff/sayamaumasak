@@ -43,6 +43,9 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::patch('/recipes/{recipe}/approve', [RecipeController::class, 'approve'])->name('recipes.approve');
     Route::patch('/recipes/{recipe}/reject', [RecipeController::class, 'reject'])->name('recipes.reject');
 
+    Route::patch('/stories/{story}/approve', [CulinaryStoryController::class, 'approve'])->name('admin.stories.approve');
+    Route::patch('/stories/{story}/reject', [CulinaryStoryController::class, 'reject'])->name('admin.stories.reject');
+
     Route::get('/foods', [FoodController::class, 'index'])->name('foods.index');
     Route::get('/foods/{food}/edit', [FoodController::class, 'edit'])->name('foods.edit');
     Route::put('/foods/{food}', [FoodController::class, 'update'])->name('foods.update');

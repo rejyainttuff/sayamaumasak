@@ -161,28 +161,41 @@
                                     <strong>{{ $pendingSummary['stories'] }}</strong>
                                 </a>
                             </div>
-                        </div>
 
-                        <div class="admin-card white">
-                            <div class="admin-card-head">
-                                <h2>Aktivitas Terbaru</h2>
-                            </div>
-                            <ul class="activity-feed-list">
-                                @forelse ($recentActivities as $act)
-                                    <li>
-                                        <span class="activity-dot type-{{ $act['type'] }}"></span>
-                                        <div>
-                                            <p>{{ $act['text'] }}</p>
-                                            <small>{{ $act['time'] }}</small>
+                            {{-- Tambahan: Daftar item menunggu persetujuan + aksi Setujui / Tolak --}}
+                            <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+                                @forelse ($pendingSubmissions as $item)
+                                    <div style="border-top: 1px solid rgba(0,0,0,0.08); padding-top: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                        <div style="min-width: 0;">
+                                            <div style="font-size: 13px; font-weight: 700;">
+                                                [{{ $item['label'] }}] {{ $item['name'] }}
+                                            </div>
+                                            <div style="font-size: 11.5px; color: var(--muted);">
+                                                {{ $item['author'] }} &middot; {{ ucfirst($item['status']) }}
+                                            </div>
                                         </div>
-                                    </li>
+
+                                        @if ($item['type'] === 'story')
+                                            <div style="display: flex; gap: 6px;">
+                                                <form action="{{ route('admin.stories.approve', $item['id']) }}" method="POST" style="display:inline;">
+                                                    @csrf
+                                                    @method('PATCH')
+                                                    <button type="submit" class="pill-tag active">Setujui</button>
+                                                </form>
+
+                                                <form action="{{ route('admin.stories.reject', $item['id']) }}" method="POST" style="display:inline;">
+                                                    @csrf
+                                                    @method('PATCH')
+                                                    <button type="submit" class="pill-tag">Tolak</button>
+                                                </form>
+                                            </div>
+                                        @endif
+                                    </div>
                                 @empty
-                                    <li style="color: var(--muted); font-size: 12.5px;">Belum ada aktivitas tercatat.</li>
+                                    <p style="font-size: 12.5px; color: var(--muted); margin: 4px 0 0;">Tidak ada konten yang menunggu persetujuan.</p>
                                 @endforelse
-                            </ul>
+                            </div>
                         </div>
-                    </div>
-                </div>
 
                 {{-- H. Ringkasan 1 Card Pengajuan Contributor di Bagian Paling Bawah --}}
                 <div class="admin-card white" id="pending-contributors">
